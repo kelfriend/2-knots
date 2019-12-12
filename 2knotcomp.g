@@ -67,6 +67,7 @@
     
     big_grid:=List([1..4*grid_number],x->[1..4*grid_number]*0);
 # quadruple the size of the grid to allow for the 0-skeleton to be displayed
+# nicely in an array
     for i in [1..grid_number] do
         for j in [1..grid_number] do
             if CornerConfiguration(i,j) in [1,4] then
@@ -101,11 +102,40 @@
     1SkeletonOfDisk:=function(bnd)
 # adds to bound a regular CW-decomposition of a solid disk
         local
-            i;
+            i, hslice, j, vslice,
+            loops1, loops2;
 
         for i in [1..nr0cells] do
             Add(bnd[1],[1,0]);
         od;
+
+        # add the horizontal 1-cells
+        for i in big_grid{[2..Length(big_grid)-1]} do
+            hslice:=Filtered(i,x->x<>0);
+            for j in [1..Length(hslice)-1] do
+                Add(bound[2],[2,hslice[j],hslice[j+1]]);
+            od;
+        od;
+
+        # add the vertical 1-cells
+        for i in TransposedMat(big_grid){[2..Length(big_grid)-1]} do
+            vslice:=Filtered(i,x->x<>0);
+            for j in [1..Length(vslice)-1] do
+                Add(bound[2],[2,vslice[j],vslice[j+1]]);
+            od;
+        od;
+
+        # add the loops (my brother)
+        for i in [2,6..Length(big_grid)-4] do
+            loops1:=Filtered(big_grid[i],x->x<>0);
+            loops2:=Filtered(big_grid[i+3],x->x<>0);
+            Add(bound[2],[2,loops1[1],loops2[1]]);
+            Add(bound[2],[2,loops1[Length(loops1)],loops2[Length(loops2)]]);
+        od;
+
+        # add the remaining two 1-cells to keep things regular
+        Add(bound[2],[2,1,2]); Add(bound[2],[2,nr0cells-1,nr0cells]);
+        Add(bound[2],[2,1,nr0cells]); Add(bound[2],[2,1,nr0cells]);
 
         return bnd;
     end;
