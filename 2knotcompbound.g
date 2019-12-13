@@ -1,8 +1,9 @@
-2KnotComplement:=function(arc,lvls)
+2KnotComplementWithBoundary:=function(arc,lvls)
     local
         arc_presentation, levels, grid_number, grid,
         i, IsIntersection, CornerConfiguration, big_grid,
-        j, k, nr0cells, bound, 1SkeletonOfDisk;
+        j, k, nr0cells, bound, knot_boundary,
+        inc_mapping, 1SkeletonOfDisk;
 
     arc_presentation:=ShallowCopy(arc);
     levels:=ShallowCopy(lvls);
@@ -99,50 +100,86 @@
 
     bound:=List([1..6],x->[]); # the beginnings of the boundary list
 
+    knot_boundary:=ShallowCopy(bound)*1;
+    inc_mapping:=ShallowCopy(bound)*1; # these will be used to create an inclusion
+    # from the boundary of the knot to this complement space
+
     1SkeletonOfDisk:=function(bnd)
 # adds to bound a regular CW-decomposition of a solid disk
         local
-            i, hslice, j, vslice,
-            loops1, loops2;
+            i, nr, hslice, j,
+            vslice, index, loops1, loops2;
 
         for i in [1..nr0cells] do
             Add(bnd[1],[1,0]);
         od;
 
         # add the horizontal 1-cells
-        for i in big_grid{[2..Length(big_grid)-1]} do
-            hslice:=Filtered(i,x->x<>0);
+        nr:=0; # this just counts which horizontal bar the loop is currently in
+        for i in [2..Length(big_grid)-1] do
+            hslice:=Filtered(big_grid[i],x->x<>0);
+            if hslice<>[] then
+                nr:=nr+1;
+            fi;
             for j in [1..Length(hslice)-1] do
-                Add(bound[2],[2,hslice[j],hslice[j+1]]);
+                Add(bnd[2],[2,hslice[j],hslice[j+1]]);
+                if levels[Int((nr-1)/2)+1]=-1 then
+                # if this bar is given -ve sign in the
+                # input, then it also appars in the knot boundary
+                    Add(knot_boundary[2],[2,hslice[j]-1,hslice[j+1]-1]);
+                    Add(inc_mapping[2],Length(bnd[2]));
+                fi;
             od;
         od;
 
-        # add the vertical 1-cells
+        # add the vertical 1-cells (almost identically so)
+        nr:=0;
         for i in TransposedMat(big_grid){[2..Length(big_grid)-1]} do
             vslice:=Filtered(i,x->x<>0);
+            if vslice<>[] then
+                nr:=nr+1;
+            fi;
             for j in [1..Length(vslice)-1] do
-                Add(bound[2],[2,vslice[j],vslice[j+1]]);
+                Add(bnd[2],[2,vslice[j],vslice[j+1]]);
+                if levels[Int((nr-1)/2)+1]=-1 then
+                    Add(knot_boundary[2],[2,vslice[j]-1,vslice[j+1]-1]);
+                    Add(inc_mapping[2],Length(bnd[2]));
+                fi;
             od;
         od;
 
         # add the loops (my brother)
+        index:=1;
         for i in [2,6..Length(big_grid)-4] do
             loops1:=Filtered(big_grid[i],x->x<>0);
             loops2:=Filtered(big_grid[i+3],x->x<>0);
-            Add(bound[2],[2,loops1[1],loops2[1]]);
-            Add(bound[2],[2,loops1[Length(loops1)],loops2[Length(loops2)]]);
+            for j in [1,2] do
+                Add(bnd[2],[2,loops1[1],loops2[1]]);
+                Add(bnd[2],[2,loops1[Length(loops1)],loops2[Length(loops2)]]);
+                # these 'loops' also appear in the boundary of the knot
+                Add(knot_boundary[2],[2,index,index+2]);
+                Add(knot_boundary[2],[2,index+1,index+3]);
+                Add(inc_mapping[2],Length(bnd[2])-1);
+                Add(inc_mapping[2],Length(bnd[2]));
+            od;
+            index:=index+4;
         od;
 
-        # add the remaining two 1-cells to keep things regular
+        # add the remaining 4 1-cells to keep things regular
         Add(bound[2],[2,1,2]); Add(bound[2],[2,nr0cells-1,nr0cells]);
         Add(bound[2],[2,1,nr0cells]); Add(bound[2],[2,1,nr0cells]);
+
+        # lastly, for the 1-skeleton, add the 0-cells to knot_boundary
+        for i in [1..nr0cells-2] do
+            Add(knot_boundary[1],[1,0]);
+        od;
 
         return bnd;
     end;
 
     1SkeletonOfDisk(bound);
 
-    return bound;
+    return [knot_boundary,bound];
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
