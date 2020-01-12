@@ -3,7 +3,7 @@
         arc_presentation, levels, grid_number, grid,
         i, IsIntersection, CornerConfiguration, big_grid,
         j, k, nr0cells, bound, knot_boundary,
-        inc_mapping, 1SkeletonOfDisk;
+        inc_mapping, 1SkeletonOfDisk, 2SkeletonOfDisk;
 
     arc_presentation:=ShallowCopy(arc);
     levels:=ShallowCopy(lvls);
@@ -179,7 +179,87 @@
 
     1SkeletonOfDisk(bound);
 
-    return [knot_boundary,bound];
+    2SkeletonOfDisk:=function(bnd)
+        local
+            orientation, neighbours,
+            NeighbourMatch, i, j;
+
+# each 0-cell will have the 1-cells connecting it to its neighbours oriented.
+# there are 12 ways of doing this. it can be visualised as the time on a clock.
+        orientation:=List([1..Length(bnd[1])],x->[1..12]*0);
+
+        # the first and last 0-cells are exceptions, their orientations are
+        # assigned separately
+        orientation[1][3]:=Length(bnd[1]);
+        orientation[1][4]:=2;
+        orientation[1][6]:=Length(bnd[1]);
+        
+        orientation[Length(bnd[1])][9]:=1;
+        orientation[Length(bnd[1])][10]:=Length(bnd[1])-1;
+        orientation[Length(bnd[1])][12]:=1;
+
+        # simply a list of each 0-cell's neighbours
+        neighbours:=List([1..Length(bnd[1])],x->[]);
+        for i in List(bnd[2],x->[x[2],x[3]]) do
+            Add(neighbours[i[1]],i[2]);
+            Add(neighbours[i[2]],i[1]);
+        od;
+        neighbours:=List(neighbours,x->Set(x));
+
+################################################################################
+        NeighbourMatch:=function(i,j)
+            local
+                x, pos_i, pos_j;
+            
+            for x in [1..Length(big_grid)] do
+                if Position(big_grid[x],i)<>fail then
+                    pos_i:=[Position(big_grid[x],i),x];
+                fi;
+                if Position(big_grid[x],j)<>fail then
+                    pos_j:=[Position(big_grid[x],j),x];
+                fi;
+            od;
+            
+            if pos_i[2]=pos_j[2] then
+                if pos_i[1]<pos_j[1] then
+                    orientation[i][3]:=j;
+                else
+                    orientation[i][9]:=j;
+                fi;
+            elif pos_i[2]<pos_j[2] then
+                if pos_i[1]=pos_j[1] then
+                    orientation[i][6]:=j;
+                elif pos_i[1]<pos_j[1] then
+                    orientation[i][4]:=j;
+                    orientation[i][5]:=j;
+                else
+                    orientation[i][7]:=j;
+                    orientation[i][8]:=j;
+                fi;
+            else
+                if pos_i[1]=pos_j[1] then
+                    orientation[i][12]:=j;
+                elif pos_i[1]<pos_j[1] then
+                    orientation[i][1]:=j;
+                    orientation[i][2]:=j;
+                else
+                    orientation[i][10]:=j;
+                    orientation[i][11]:=j;
+                fi;
+            fi;
+        end;
+################################################################################
+
+        for i in [2..Length(neighbours)-1] do
+            for j in neighbours[i] do
+                NeighbourMatch(i,j);
+            od;
+        od;
+# orientations are done, just implement facetrace and finish the 2-skeleton of the disk
+        return orientation;
+    end;
+
+    return 2SkeletonOfDisk(bound);
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
