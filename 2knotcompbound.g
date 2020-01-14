@@ -104,6 +104,7 @@
     inc_mapping:=ShallowCopy(bound)*1; # these will be used to create an inclusion
     # from the boundary of the knot to this complement space
 
+################################################################################
     1SkeletonOfDisk:=function(bnd)
 # adds to bound a regular CW-decomposition of a solid disk
         local
@@ -148,7 +149,7 @@
             od;
         od;
 
-        # add the loops (my brother)
+        # add the loops
         index:=1;
         for i in [2,6..Length(big_grid)-4] do
             loops1:=Filtered(big_grid[i],x->x<>0);
@@ -176,90 +177,171 @@
 
         return bnd;
     end;
-
-    1SkeletonOfDisk(bound);
-
+################################################################################
+    inc_mapping[1]:=[2..nr0cells-1];
+################################################################################
+# this is mostly self-plagiarised from knotcomp
     2SkeletonOfDisk:=function(bnd)
         local
-            orientation, neighbours,
-            NeighbourMatch, i, j;
+            Orient, Clockwise, path, FaceTrace;
 
-# each 0-cell will have the 1-cells connecting it to its neighbours oriented.
-# there are 12 ways of doing this. it can be visualised as the time on a clock.
-        orientation:=List([1..Length(bnd[1])],x->[1..12]*0);
+        Orient:=function()
+            local 
+                unchosen, neighbours, i, j,
+                Clockwise;
 
-        # the first and last 0-cells are exceptions, their orientations are
-        # assigned separately
-        orientation[1][3]:=Length(bnd[1]);
-        orientation[1][4]:=2;
-        orientation[1][6]:=Length(bnd[1]);
-        
-        orientation[Length(bnd[1])][9]:=1;
-        orientation[Length(bnd[1])][10]:=Length(bnd[1])-1;
-        orientation[Length(bnd[1])][12]:=1;
+            unchosen:=List(ShallowCopy(bnd[2]),x->[x[2],x[3]]);
+            neighbours:=List(ShallowCopy(bnd[1]),x->[]);
 
-        # simply a list of each 0-cell's neighbours
-        neighbours:=List([1..Length(bnd[1])],x->[]);
-        for i in List(bnd[2],x->[x[2],x[3]]) do
-            Add(neighbours[i[1]],i[2]);
-            Add(neighbours[i[2]],i[1]);
-        od;
-        neighbours:=List(neighbours,x->Set(x));
-
-################################################################################
-        NeighbourMatch:=function(i,j)
-            local
-                x, pos_i, pos_j;
-            
-            for x in [1..Length(big_grid)] do
-                if Position(big_grid[x],i)<>fail then
-                    pos_i:=[Position(big_grid[x],i),x];
-                fi;
-                if Position(big_grid[x],j)<>fail then
-                    pos_j:=[Position(big_grid[x],j),x];
-                fi;
+            for i in [1..Length(bnd[1])] do
+                for j in [1..Length(unchosen)] do
+                    if i in unchosen[j] then
+                        Add(neighbours[i],j);
+                    fi;
+                od;
             od;
-            
-            if pos_i[2]=pos_j[2] then
-                if pos_i[1]<pos_j[1] then
-                    orientation[i][3]:=j;
-                else
-                    orientation[i][9]:=j;
-                fi;
-            elif pos_i[2]<pos_j[2] then
-                if pos_i[1]=pos_j[1] then
-                    orientation[i][6]:=j;
-                elif pos_i[1]<pos_j[1] then
-                    orientation[i][4]:=j;
-                    orientation[i][5]:=j;
-                else
-                    orientation[i][7]:=j;
-                    orientation[i][8]:=j;
-                fi;
-            else
-                if pos_i[1]=pos_j[1] then
-                    orientation[i][12]:=j;
-                elif pos_i[1]<pos_j[1] then
-                    orientation[i][1]:=j;
-                    orientation[i][2]:=j;
-                else
-                    orientation[i][10]:=j;
-                    orientation[i][11]:=j;
-                fi;
-            fi;
+
+            Clockwise:=function(neighbours)
+                local
+                    oriented, first0, last0,
+                    i, j, x, k, l, posi, posx;
+
+                oriented:=List(neighbours,x->List([1..12],y->"pass"));
+                first0:=SortedList(neighbours[1]);
+                last0:=SortedList(neighbours[Length(neighbours)]);
+
+                oriented[1][7]:=first0[1];
+                oriented[1][6]:=first0[3];
+                oriented[1][8]:=first0[2];
+                oriented[Length(oriented)][1]:=last0[1]; 
+                oriented[Length(oriented)][2]:=last0[3];
+                oriented[Length(oriented)][12]:=last0[2];
+
+                for i in [2..Length(neighbours)-1] do
+                    for j in [1..Length(neighbours[i])] do
+                        x:=bound[2][neighbours[i][j]];
+                        x:=Filtered(x{[2,3]},y->y<>i)[1];
+                        for k in [1..Length(big_grid)] do
+                            for l in [1..Length(big_grid[1])] do
+                                if i=big_grid[k][l] then
+                                    posi:=[k,l];
+                                fi;
+                                if x=big_grid[k][l]then
+                                    posx:=[k,l];
+                                fi;
+                            od;
+                        od;
+                        # _\\|//_
+                        #  //|\\
+                        if posi[1]>posx[1] then
+                            if posi[2]=posx[2] then
+                                oriented[i][1]:=neighbours[i][j];
+                            elif posi[2]<posx[2] then
+                                if oriented[i][2]="pass" then
+                                    oriented[i][2]:=neighbours[i][j];
+                                else
+                                    oriented[i][3]:=neighbours[i][j];
+                                fi;
+                            elif posi[2]>posx[2] then
+                                if oriented[i][12]="pass" then
+                                    oriented[i][12]:=neighbours[i][j];
+                                else
+                                    oriented[i][11]:=neighbours[i][j];
+                                fi;
+                            fi;
+                        elif posi[1]=posx[1] then
+                            if posi[2]<posx[2] then
+                                oriented[i][4]:=neighbours[i][j];
+                            elif posi[2]>posx[2] then
+                                oriented[i][10]:=neighbours[i][j];
+                            fi;
+                        elif posi[1]<posx[1] then
+                            if posi[2]=posx[2] then
+                                oriented[i][7]:=neighbours[i][j];
+                            elif posi[2]<posx[2] then
+                                if oriented[i][5]="pass" then
+                                    oriented[i][5]:=neighbours[i][j];
+                                else
+                                    oriented[i][6]:=neighbours[i][j];
+                                fi;
+                            elif posi[2]>posx[2] then
+                                if oriented[i][9]="pass" then
+                                    oriented[i][9]:=neighbours[i][j];
+                                else
+                                    oriented[i][8]:=neighbours[i][j];
+                                fi;
+                            fi;
+                        fi;
+                    od;
+                od;
+                
+                return oriented;
+            end;
+
+            return Clockwise(neighbours);
         end;
+
+        path:=Orient();
+
+        FaceTrace:=function(path)
+            local
+                unselectedEdges, sourceORtarget, faceloops,
+                x, ClockwiseTurn, IsLoop, loop_correction, edge,
+                2nd_loop, 2cell, sORt, ori, e1, e0, i;
+
+            unselectedEdges:=List([1..Length(bnd[2])-2]);
+            unselectedEdges:=Concatenation(unselectedEdges,unselectedEdges);
+            Add(unselectedEdges,Length(bnd[2])-1);
+            Add(unselectedEdges,Length(bnd[2]));
+
+            ClockwiseTurn:=function(p,e)
+                local f;
+                
+                f:=(Position(p,e) mod 12)+1;
+                while p[f]="pass" do
+                    f:=(f mod 12)+1;
+                od;
+                
+                return p[f];
+            end;
+
+            sourceORtarget:=List([1..Length(bnd[2])],y->[3,2]);
+            x:=1;
+            while unselectedEdges<>[] do
+                while (not x in unselectedEdges) and (not e1 in unselectedEdges) do
+                    x:=x+1;
+                od;
+                2cell:=[x];
+                sORt:=sourceORtarget[x][Length(sourceORtarget[x])];
+                Unbind(sourceORtarget[x][Length(sourceORtarget[x])]);
+
+                ori:=path[bnd[2][x][sORt]];
+                e0:=bnd[2][x][sORt];
+                e1:=ClockwiseTurn(ori,x);
+                while e1<>x do
+                    Add(2cell,e1);
+                    e0:=Filtered(bnd[2][e1]{[2,3]},y->y<>e0)[1];
+                    ori:=path[e0];
+                    e1:=ClockwiseTurn(ori,e1);
+                od;
+                Add(2cell,Length(2cell),1);
+                if (not Set(2cell) in List(bnd[3],x->Set(x))) then
+                    for i in Filtered(2cell{[2..Length(2cell)]},y->y in unselectedEdges) do
+                        Unbind(unselectedEdges[Position(unselectedEdges,i)]);
+                    od;
+                    Add(bnd[3],2cell);
+                fi;
+            od;
+
+            bnd[3]:=Filtered(bound[3],y->y[1]<>2);
+            bnd[3]:=List(bnd[3],x->Concatenation([x[1]],Set(x{[2..Length(x)]})));
+        end;
+        FaceTrace(path);
+        return [inc_mapping,knot_boundary,bnd];
+    end;
 ################################################################################
 
-        for i in [2..Length(neighbours)-1] do
-            for j in neighbours[i] do
-                NeighbourMatch(i,j);
-            od;
-        od;
-# orientations are done, just implement facetrace and finish the 2-skeleton of the disk
-        return orientation;
-    end;
-
-    return 2SkeletonOfDisk(bound);
+    return 2SkeletonOfDisk(1SkeletonOfDisk(bound));
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
