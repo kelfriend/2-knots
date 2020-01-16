@@ -3,7 +3,8 @@
         arc_presentation, levels, grid_number, grid,
         i, IsIntersection, CornerConfiguration, big_grid,
         j, k, nr0cells, bound, knot_boundary,
-        inc_mapping, 1SkeletonOfDisk, 2SkeletonOfDisk;
+        inc_mapping, hbars, vbars, 1SkeletonOfDisk,
+        2SkeletonOfDisk;
 
     arc_presentation:=ShallowCopy(arc);
     levels:=ShallowCopy(lvls);
@@ -25,7 +26,6 @@
     od;
 
     IsIntersection:=function(i,j)
-# detects the number of crossings in the grid
         if grid[i][j]=0 then
             if 1 in grid[i]{[1..j]} then
                 if 1 in grid[i]{[j..grid_number]} then
@@ -42,22 +42,21 @@
     end;
 
     CornerConfiguration:=function(i,j);
-# assigns an orientation to the various corners in the arc presentation
         if grid[i][j]=1 then
             if Size(Positions(grid[i]{[j..grid_number]},1))=2 then
-                if Size(Positions(List([i..grid_number],x->grid[x][j]),1))=2
-                    then # Corner type 1, i.e : __
+                if Size(Positions(List([i..grid_number],x->grid[x][j]),1))=2 then
+                         # Corner type 1, i.e : __
                     return 1; #                |
-                elif Size(Positions(List([1..i],x->grid[x][j]),1))=2
-                    then # Corner type 3, i.e :
+                elif Size(Positions(List([1..i],x->grid[x][j]),1))=2 then
+                         # Corner type 3, i.e :
                     return 3; #                |__
                 fi;
             elif Size(Positions(grid[i]{[1..j]},1))=2 then
-                if Size(Positions(List([i..grid_number],x->grid[x][j]),1))=2
-                    then # Corner type 2, i.e : __
+                if Size(Positions(List([i..grid_number],x->grid[x][j]),1))=2 then
+                         # Corner type 2, i.e : __
                     return 2; #                   |
-                elif Size(Positions(List([1..i],x->grid[x][j]),1))=2
-                    then # Corner type 4, i.e :
+                elif Size(Positions(List([1..i],x->grid[x][j]),1))=2 then
+                         # Corner type 4, i.e :
                     return 4; #                 __|
                 fi;
             fi;
@@ -101,84 +100,108 @@
     bound:=List([1..6],x->[]); # the beginnings of the boundary list
 
     knot_boundary:=ShallowCopy(bound)*1;
-    inc_mapping:=ShallowCopy(bound)*1; # these will be used to create an inclusion
-    # from the boundary of the knot to this complement space
+    inc_mapping:=ShallowCopy(bound)*1; # these will be used to create an
+    # inclusion from the boundary of the knot to this complement space
+    hbars:=List([1..grid_number],x->[]);
+    vbars:=List([1..grid_number],x->[]);
 
 ################################################################################
     1SkeletonOfDisk:=function(bnd)
-# adds to bound a regular CW-decomposition of a solid disk
+    # adds to bound a regular CW-decomposition of a solid disk
         local
-            i, nr, hslice, j,
-            vslice, index, loops1, loops2;
+            i, hslice, j, vslice, loops1, loops2, k;
 
         for i in [1..nr0cells] do
             Add(bnd[1],[1,0]);
         od;
 
         # add the horizontal 1-cells
-        nr:=0; # this just counts which horizontal bar the loop is currently in
         for i in [2..Length(big_grid)-1] do
             hslice:=Filtered(big_grid[i],x->x<>0);
-            if hslice<>[] then
-                nr:=nr+1;
-            fi;
             for j in [1..Length(hslice)-1] do
                 Add(bnd[2],[2,hslice[j],hslice[j+1]]);
-                if levels[Int((nr-1)/2)+1]=-1 then
-                # if this bar is given -ve sign in the
-                # input, then it also appars in the knot boundary
-                    Add(knot_boundary[2],[2,hslice[j]-1,hslice[j+1]-1]);
-                    Add(inc_mapping[2],Length(bnd[2]));
-                fi;
             od;
         od;
 
         # add the vertical 1-cells (almost identically so)
-        nr:=0;
         for i in TransposedMat(big_grid){[2..Length(big_grid)-1]} do
             vslice:=Filtered(i,x->x<>0);
-            if vslice<>[] then
-                nr:=nr+1;
-            fi;
             for j in [1..Length(vslice)-1] do
                 Add(bnd[2],[2,vslice[j],vslice[j+1]]);
-                if levels[Int((nr-1)/2)+1]=-1 then
-                    Add(knot_boundary[2],[2,vslice[j]-1,vslice[j+1]-1]);
-                    Add(inc_mapping[2],Length(bnd[2]));
-                fi;
             od;
         od;
 
         # add the loops
-        index:=1;
         for i in [2,6..Length(big_grid)-4] do
             loops1:=Filtered(big_grid[i],x->x<>0);
             loops2:=Filtered(big_grid[i+3],x->x<>0);
             for j in [1,2] do
                 Add(bnd[2],[2,loops1[1],loops2[1]]);
                 Add(bnd[2],[2,loops1[Length(loops1)],loops2[Length(loops2)]]);
-                # these 'loops' also appear in the boundary of the knot
-                Add(knot_boundary[2],[2,index,index+2]);
-                Add(knot_boundary[2],[2,index+1,index+3]);
-                Add(inc_mapping[2],Length(bnd[2])-1);
-                Add(inc_mapping[2],Length(bnd[2]));
             od;
-            index:=index+4;
         od;
 
         # add the remaining 4 1-cells to keep things regular
-        Add(bound[2],[2,1,2]); Add(bound[2],[2,nr0cells-1,nr0cells]);
-        Add(bound[2],[2,1,nr0cells]); Add(bound[2],[2,1,nr0cells]);
+        Add(bnd[2],[2,1,2]); Add(bnd[2],[2,nr0cells-1,nr0cells]);
+        Add(bnd[2],[2,1,nr0cells]); Add(bnd[2],[2,1,nr0cells]);
 
-        # lastly, for the 1-skeleton, add the 0-cells to knot_boundary
-        for i in [1..nr0cells-2] do
+        ########################################################################
+        # now to add the appropriate cells to knot_boundary to work towards an
+        # inclusion
+        for i in [1..grid_number] do
+            for j in big_grid{[2..5]+4*(i-1)} do
+                for k in Filtered(j,x->x<>0) do
+                    Add(hbars[i],k);
+                od;
+            od;
+        od;
+        for i in [2..Length(big_grid)-1] do
+            for j in [1..grid_number] do
+                for k in big_grid[i]{[2..5]+4*(j-1)} do
+                    if k<>0 then
+                        Add(vbars[j],k);
+                    fi;
+                od;
+            od;
+        od;
+
+        inc_mapping[1]:=[2..Length(bnd[1])-1];
+        inc_mapping[1]:=Concatenation(inc_mapping[1],inc_mapping[1]+Length(bnd[1])-1);
+        for i in [1..Length(inc_mapping[1])] do
             Add(knot_boundary[1],[1,0]);
         od;
 
+        for i in [1..2*grid_number] do
+            if i<=grid_number then
+                for j in Filtered(bnd[2],x->(x[2] in hbars[i] and x[3] in hbars[i])) do
+                    if levels[i]=-1 then
+# if the level is + then the cells will be added later to avoid convolution
+                        if not Length(Positions(knot_boundary[2],[2,j[2]-1,j[3]-1]))>2 then 
+                            Add(knot_boundary[2],[2,j[2]-1,j[3]-1]);
+                            if not Position(bnd[2],j) in inc_mapping[2] then
+                                Add(inc_mapping[2],Position(bnd[2],j));
+                            else
+                                Add(inc_mapping[2],Position(bnd[2],j)+2);
+                            fi;
+                        fi;
+                    fi;
+                od;
+            else
+                for j in Filtered(bnd[2],x->(x[2] in vbars[i-grid_number] and x[3] in vbars[i-grid_number])) do
+                    if levels[i]=-1 then
+                        if not [2,j[2]-1,j[3]-1] in knot_boundary[2] then
+                            Add(knot_boundary[2],[2,j[2]-1,j[3]-1]);
+                            Add(inc_mapping[2],Position(bnd[2],j));
+                        fi;
+                    fi;
+                od;
+            fi;
+        od;
+        ########################################################################
         return bnd;
     end;
 ################################################################################
-    inc_mapping[1]:=[2..nr0cells-1];
+    1SkeletonOfDisk(bound);
 ################################################################################
 # this is mostly self-plagiarised from knotcomp
     2SkeletonOfDisk:=function(bnd)
@@ -286,8 +309,8 @@
         FaceTrace:=function(path)
             local
                 unselectedEdges, sourceORtarget, faceloops,
-                x, ClockwiseTurn, IsLoop, loop_correction, edge,
-                2nd_loop, 2cell, sORt, ori, e1, e0, i;
+                x, ClockwiseTurn, 2cell, sORt, ori, e1, e0, i,
+                loops, present_loops, j;
 
             unselectedEdges:=List([1..Length(bnd[2])-2]);
             unselectedEdges:=Concatenation(unselectedEdges,unselectedEdges);
@@ -333,15 +356,31 @@
                 fi;
             od;
 
-            bnd[3]:=Filtered(bound[3],y->y[1]<>2);
+            # if loops are present in the bottom layer,
+            # then they're not filtered out below
+            loops:=Filtered(bnd[3],x->x[1]=2);
+            present_loops:=[];
+            for i in [1..grid_number] do
+                if levels[i]=-1 then
+                    for j in Filtered(loops,x->bnd[2][x[2]][2] in hbars[i] and bnd[2][x[2]][3] in hbars[i]) do
+                        Add(present_loops,j);
+                    od;
+                fi;
+                if levels[grid_number+i]=-1 then
+                    for j in Filtered(loops,x->bnd[2][x[2]][2] in vbars[i] and bnd[2][x[2]][3] in vbars[i]) do
+                        Add(present_loops,j);
+                    od;
+                fi;
+            od;
+            bnd[3]:=Filtered(bnd[3],x->not x in Difference(loops,present_loops));
             bnd[3]:=List(bnd[3],x->Concatenation([x[1]],Set(x{[2..Length(x)]})));
+
         end;
         FaceTrace(path);
-        return [inc_mapping,knot_boundary,bnd];
     end;
 ################################################################################
-
-    return 2SkeletonOfDisk(1SkeletonOfDisk(bound));
+    2SkeletonOfDisk(bound);
+    return bound;#[bound,knot_boundary,inc_mapping];
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
