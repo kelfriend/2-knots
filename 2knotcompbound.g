@@ -310,7 +310,7 @@
             local
                 unselectedEdges, sourceORtarget, faceloops,
                 x, ClockwiseTurn, 2cell, sORt, ori, e1, e0, i,
-                loops, present_loops, j;
+                loops, present_loops, j, k, vertices, check;
 
             unselectedEdges:=List([1..Length(bnd[2])-2]);
             unselectedEdges:=Concatenation(unselectedEdges,unselectedEdges);
@@ -356,31 +356,53 @@
                 fi;
             od;
 
-            # if loops are present in the bottom layer,
-            # then they're not filtered out below
-            loops:=Filtered(bnd[3],x->x[1]=2);
-            present_loops:=[];
-            for i in [1..grid_number] do
-                if levels[i]=-1 then
-                    for j in Filtered(loops,x->bnd[2][x[2]][2] in hbars[i] and bnd[2][x[2]][3] in hbars[i]) do
-                        Add(present_loops,j);
-                    od;
-                fi;
-                if levels[grid_number+i]=-1 then
-                    for j in Filtered(loops,x->bnd[2][x[2]][2] in vbars[i] and bnd[2][x[2]][3] in vbars[i]) do
-                        Add(present_loops,j);
-                    od;
-                fi;
-            od;
-            bnd[3]:=Filtered(bnd[3],x->not x in Difference(loops,present_loops));
+            # if loops are specified as present in the upper layer
+            # (+1 in input), then they're not filtered out below
+            #loops:=Filtered(bnd[3],x->x[1]=2);
+            #present_loops:=[];
+            #for i in [1..grid_number] do
+            #    if levels[i]=-1 then
+            #        for j in Filtered(loops,x->bnd[2][x[2]][2] in hbars[i] and bnd[2][x[2]][3] in hbars[i]) do
+            #            Add(present_loops,j);
+            #        od;
+            #    fi;
+            #    if levels[grid_number+i]=-1 then
+            #        for j in Filtered(loops,x->bnd[2][x[2]][2] in vbars[i] and bnd[2][x[2]][3] in vbars[i]) do
+            #            Add(present_loops,j);
+            #        od;
+            #    fi;
+            #od;
+            #bnd[3]:=Filtered(bnd[3],x->not x in Difference(loops,present_loops));
+            bnd[3]:=Filtered(bnd[3],x->x[1]<>2); # remove this line later
             bnd[3]:=List(bnd[3],x->Concatenation([x[1]],Set(x{[2..Length(x)]})));
 
+            # now to add the appropriate 2-cells to the boundary of the knot
+            for i in bnd[3] do
+                vertices:=[];
+                for j in i{[2..5]} do
+                    Add(vertices,bnd[2][j][2]);
+                    Add(vertices,bnd[2][j][3]);
+                od;
+                vertices:=Set(vertices);
+                check:=false;
+                for j in [1..grid_number] do
+                    if Intersection(vertices,hbars[j])=vertices then
+                        check:=true;
+                    fi;
+                    if Intersection(vertices,vbars[j])=vertices then
+                        check:=true;
+                    fi;
+                od;
+                if check then
+                    Add(knot_boundary[3],Concatenation([i[1]],List(i{[2..Length(i)]},x->Position(inc_mapping[2],x))));
+                fi;
+            od;
         end;
         FaceTrace(path);
     end;
 ################################################################################
     2SkeletonOfDisk(bound);
-    return bound;#[bound,knot_boundary,inc_mapping];
+    return knot_boundary;#[bound,knot_boundary,inc_mapping];
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
