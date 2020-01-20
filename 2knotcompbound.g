@@ -3,8 +3,8 @@
         arc_presentation, levels, grid_number, grid,
         i, IsIntersection, CornerConfiguration, big_grid,
         j, k, nr0cells, bound, knot_boundary,
-        inc_mapping, hbars, vbars, 1SkeletonOfDisk,
-        2SkeletonOfDisk;
+        inc_mapping, hbars, vbars, inc, 1SkeletonOfDisk,
+        2SkeletonOfDisk, 3SkeletonOfTube;
 
     arc_presentation:=ShallowCopy(arc);
     levels:=ShallowCopy(lvls);
@@ -105,6 +105,8 @@
     hbars:=List([1..grid_number],x->[]);
     vbars:=List([1..grid_number],x->[]);
 
+    # inc:={n,k}->bound[n+1][inc_mapping[n+1][k]];
+
 ################################################################################
     1SkeletonOfDisk:=function(bnd)
     # adds to bound a regular CW-decomposition of a solid disk
@@ -166,7 +168,6 @@
         od;
 
         inc_mapping[1]:=[2..Length(bnd[1])-1];
-        inc_mapping[1]:=Concatenation(inc_mapping[1],inc_mapping[1]+Length(bnd[1])-1);
         for i in [1..Length(inc_mapping[1])] do
             Add(knot_boundary[1],[1,0]);
         od;
@@ -394,7 +395,17 @@
                     fi;
                 od;
                 if check then
-                    Add(knot_boundary[3],Concatenation([i[1]],List(i{[2..Length(i)]},x->Position(inc_mapping[2],x))));
+                    Add(
+                        knot_boundary[3],
+                        Concatenation(
+                            [i[1]],
+                            List(
+                                i{[2..Length(i)]},
+                                x->Position(inc_mapping[2],x)
+                            )
+                        )
+                    );
+                    Add(inc_mapping[3],Position(bnd[3],i));
                 fi;
             od;
         end;
@@ -402,7 +413,149 @@
     end;
 ################################################################################
     2SkeletonOfDisk(bound);
-    return knot_boundary;#[bound,knot_boundary,inc_mapping];
+################################################################################
+    3SkeletonOfTube:=function(bnd)
+        local
+            l0, l1, l2, k0, k1, k2,
+            DuplicateDisk, JoinDisks;
+
+        l0:=Length(bnd[1]); k0:=Length(knot_boundary[1]);
+        l1:=Length(bnd[2]); k1:=Length(knot_boundary[2]);
+        l2:=Length(bnd[3]); k2:=Length(knot_boundary[3]);
+
+        DuplicateDisk:=function()
+            local
+                copy1, copy2, i,
+                pos1, 2cell, pos2;
+
+            bnd[1]:=Concatenation(bnd[1],bnd[1]);
+
+            copy1:=List(bnd[2],x->[x[1],x[2]+l0,x[3]+l0]);
+            bnd[2]:=Concatenation(bnd[2],copy1);
+
+            copy2:=List(bnd[3],x->Concatenation([x[1]],List(x{[2..Length(x)]},y->y+l1)));
+            bnd[3]:=Concatenation(bnd[3],copy2);
+
+            ####################################################################
+            # now to duplicate the knot_boundary and update inc_mapping
+            knot_boundary[1]:=Concatenation(knot_boundary[1],knot_boundary[1]);
+            inc_mapping[1]:=Concatenation(inc_mapping[1],inc_mapping[1]+l0);
+
+            for i in [1..k1] do
+                Add(knot_boundary[2],[2,knot_boundary[2][i][2]+k0,knot_boundary[2][i][3]+k0]);
+                pos1:=Position(
+                    bnd[2],
+                    [2,inc_mapping[1][knot_boundary[2][i][2]+k0],
+                    inc_mapping[1][knot_boundary[2][i][3]+k0]]
+                );
+                if pos1 in inc_mapping[2] then
+                    Add(inc_mapping[2],pos1+2); # accounting for loops
+                else
+                    Add(inc_mapping[2],pos1);
+                fi;
+            od;
+
+            knot_boundary[3]:=List(
+                knot_boundary[3],
+                x->Concatenation(
+                    [x[1]],
+                    Set(x{[2..Length(x)]})
+                )
+            );
+            for i in [1..k2] do
+                2cell:=knot_boundary[3][i];
+                2cell:=2cell+2cell*0+k1-[k1];
+                Add(knot_boundary[3],2cell);
+                pos2:=Position(
+                    bnd[3],
+                    Concatenation(
+                        [2cell[1]],
+                        Set(
+                            2cell{[2..Length(2cell)]},
+                            x->inc_mapping[2][x]
+                        )
+                    )
+                );
+                Add(inc_mapping[3],pos2);
+            od;
+        end;
+        DuplicateDisk();
+
+        JoinDisks:=function()
+            local
+                i, 3cell, j, 1cell;
+
+            for i in [1..l0] do
+                Add(bnd[2],[2,i,i+l0]);
+            od;
+
+            for i in [1..l1] do
+                Add(
+                    bnd[3],
+                    [
+                        4,
+                        i,
+                        Position(bnd[2],[2,bnd[2][i][2],bnd[2][i+l1][2]]),
+                        Position(bnd[2],[2,bnd[2][i][3],bnd[2][i+l1][3]]),
+                        i+l1
+                    ]
+                );
+            od;
+
+            for i in [1..l2] do
+                3cell:=[];
+                for j in bnd[3][i]{[2..Length(bnd[3][i])]} do
+                    Add(
+                        3cell,
+                        Position(
+                            bnd[3],
+                            [
+                                4,
+                                j,
+                                Position(bnd[2],[2,bnd[2][j][2],
+                                bnd[2][j+l1][2]]),
+                                Position(bnd[2],[2,bnd[2][j][3],bnd[2][j+l1][3]]),
+                                j+l1
+                            ]
+                        )
+                    );
+                od;
+                Add(3cell,i);
+                Add(3cell,i+l2);
+
+                Add(bnd[4],Concatenation([bnd[3][i][1]+2],3cell));
+            od;
+
+            for i in [3,4] do
+                bnd[i]:=List(bnd[i],x->Concatenation([x[1]],Set(x{[2..Length(x)]})));
+            od;
+
+            ####################################################################
+            # \/ inclusion \/
+            for i in [1..k0] do
+                1cell:=[2,i,i+k0];
+                Add(knot_boundary[2],1cell);
+                Add(
+                    inc_mapping[2],
+                    Position(
+                        bnd[2],
+                        [2,inc_mapping[1][1cell[2]],inc_mapping[1][1cell[3]]]
+                    )
+                );
+            od;
+
+            for i in [1..k1] do
+            od;
+
+            for i in [1..k2] do
+            od;
+
+        end;
+        JoinDisks();
+    end;
+################################################################################
+    3SkeletonOfTube(bound);
+    return [bound,knot_boundary,inc_mapping];
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
