@@ -483,7 +483,8 @@
 
         JoinDisks:=function()
             local
-                i, 3cell, j, 1cell;
+                i, j, 1cell, 2cell,
+                i2cell, 3cell, i3cell;
 
             for i in [1..l0] do
                 Add(bnd[2],[2,i,i+l0]);
@@ -512,8 +513,7 @@
                             [
                                 4,
                                 j,
-                                Position(bnd[2],[2,bnd[2][j][2],
-                                bnd[2][j+l1][2]]),
+                                Position(bnd[2],[2,bnd[2][j][2],bnd[2][j+l1][2]]),
                                 Position(bnd[2],[2,bnd[2][j][3],bnd[2][j+l1][3]]),
                                 j+l1
                             ]
@@ -545,9 +545,75 @@
             od;
 
             for i in [1..k1] do
+                2cell:=[
+                    i,
+                    Position(
+                        knot_boundary[2],
+                        [
+                            2,
+                            knot_boundary[2][i][2],
+                            knot_boundary[2][i+k1][2]
+                        ]
+                    ),
+                    Position(
+                        knot_boundary[2],
+                        [
+                            2,
+                            knot_boundary[2][i][3],
+                            knot_boundary[2][i+k1][3]
+                        ]
+                    ),
+                    i+k1
+                ];
+                2cell:=Concatenation([4],Set(2cell));
+                Add(knot_boundary[3],2cell);
+
+                i2cell:=List(2cell{[2..5]},x->inc_mapping[2][x]);
+                i2cell:=Set(i2cell);
+                Add(i2cell,4,1);
+                Add(inc_mapping[3],Position(bnd[3],i2cell));
             od;
 
             for i in [1..k2] do
+                3cell:=[i];
+                for j in knot_boundary[3][i]{[2..Length(knot_boundary[3][i])]} do
+                    Add(
+                        3cell,
+                        Position(
+                            knot_boundary[3],
+                            [
+                                4,
+                                j,
+                                j+k1,
+                                Position(
+                                    knot_boundary[2],
+                                    [
+                                        2,
+                                        knot_boundary[2][j][2],
+                                        knot_boundary[2][j+k1][2]
+                                    ]
+                                ),
+                                Position(
+                                    knot_boundary[2],
+                                    [
+                                        2,
+                                        knot_boundary[2][j][3],
+                                        knot_boundary[2][j+k1][3]
+                                    ]
+                                ),
+                            ]
+                        )
+                    );
+                od;
+                Add(3cell,i+k2);
+                3cell:=Set(3cell);
+                i3cell:=List(3cell,x->inc_mapping[3][x]);
+                Add(3cell,Length(3cell),1); 
+                i3cell:=Set(i3cell);
+                Add(i3cell,Length(i3cell),1);
+
+                Add(knot_boundary[4],3cell);
+                Add(inc_mapping[4],Position(bnd[4],i3cell));
             od;
 
         end;
