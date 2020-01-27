@@ -4,7 +4,8 @@
         i, IsIntersection, CornerConfiguration, big_grid,
         j, k, nr0cells, bound, knot_boundary,
         inc_mapping, hbars, vbars, inc, 1SkeletonOfDisk,
-        2SkeletonOfDisk, cap_bound, 3SkeletonOfTube, CappedCylinder;
+        2SkeletonOfDisk, cap_bound, 3SkeletonOfTube,
+        inv_inc_mapping, CappedCylinder;
 
     arc_presentation:=ShallowCopy(arc);
     levels:=ShallowCopy(lvls);
@@ -608,12 +609,19 @@
     end;
 ################################################################################
     3SkeletonOfTube(bound);
+    
+    inv_inc_mapping:=List([1..5],x->[1..Length(bound[x])]*0); # this is the inverse
+    for i in [1..5] do # of inc_mapping that should have been added earlier
+        for j in [1..Length(inc_mapping[i])] do
+            inv_inc_mapping[i][inc_mapping[i][j]]:=j;
+        od;
+    od;
 ################################################################################
     CappedCylinder:=function(bnd)
         local
             loops, lo_loops, hi_loops,
-            caps, i, h, v, j, left, right,
-            loop, 2cell;
+            caps, i, h, v, j, scale, L, left, right,
+            loop, 2cell, tube, outer, mult;
 
         loops:=Filtered(bnd[2],x->Length(Positions(bnd[2],x))=2);
         lo_loops:=Set(loops{[1..(Length(loops)/2)-2]});
@@ -653,6 +661,7 @@
                             Positions(knot_boundary[2],lo_loops[i]-[0,1,1])[2]
                         ]
                     );
+                    Add(cap_bound[2],Length(bnd[3]));
                 elif levels[h]=-1 then
                     Add(caps[Int((i+1)/2)][((i-1) mod 2)+1],1);
 
@@ -673,67 +682,140 @@
                             Positions(knot_boundary[2],hi_loops[i]-[0,3,3])[2]
                         ]
                     );
+                    Add(cap_bound[1],Length(bnd[3]));
                 fi;
             fi;
         od;
 
-    # tube time
+    # tube time - begin with horizontals in either layer
         for i in [1..grid_number] do
-            if levels[i]=-1 then
-                if Length(caps[i][1])=0 then
-                    left:=false;
-                else
-                    left:=true;
-                    loop:=lo_loops[2*i-1];
-                    Add(bnd[2],[2,loop[2],loop[3]]);
-                    Add(inc_mapping[2],Length(inc_mapping[2]));
-                    Add(knot_boundary[2],[2,loop[2]-1,loop[3]-1]);
-                fi;
-                if Length(caps[i][2])=0 then
-                    right:=false;
-                else
-                    right:=true;
-                    loop:=lo_loops[2*i];
-                    Add(bnd[2],[2,loop[2],loop[3]]);
-                    Add(inc_mapping[2],Length(inc_mapping[2]));
-                    Add(knot_boundary[2],[2,loop[2]-1,loop[3]-1]);
-                fi;
-                if not left and not right then
-                elif not left and right then
-                elif left and not right then
-                elif left and right then
-                    2cell:=[];
-                    tube:=List([1..Length(hbars[i])-4],x->x+Length(bnd[1]));
-                    outer:=List(tube,x->x+Length(tube));
-                    for j in [1..Length(tube)*2] do
-                        Add(bnd[1],[1,0]);
-                        Add(inc_mapping[1],Length(bnd[1]));
-                        Add(knot_boundary[1],[1,0]);
-                    od;
-
-                    for j in [1..(Length(hbars[i])/2)-1] do
-                        Add(2cell,Position(bnd[2],[2,hbars[i][j],hbars[i][j+1]]));
-                    od;
-                    for j in [(Length(hbars[i])/2)+1..Length(hbars[i])-1] do
-                        Add(2cell,Position(bnd[2],[2,hbars[i][j],hbars[i][j+1]]));
-                    od;
-                    Add(2cell,Positions(bnd[2],lo_loops[2*i-1])[1]);
-                    Add(2cell,Positions(bnd[2],lo_loops[2*i])[1]);
-                    2cell:=Set(2cell);
-                    Add(2cell,Length(2cell),1);
-                    Add(bnd[3],2cell);
-                fi;
+            if levels[i]=1 then # needed to allow the loop to work in both layers
+                scale:=8*grid_number+2;
+                scale:=[0,scale,scale];
+                L:=2;
             else
+                scale:=[0,0,0];
+                L:=1;
+            fi;
+            if Length(caps[i][1])=0 then
+                left:=false;
+            else
+                left:=true;
+                if L=1 then
+                    loop:=lo_loops[2*i-1];
+                else
+                    loop:=hi_loops[2*i-1];
+                fi;
+                Add(bnd[2],[2,loop[2],loop[3]]);
+                Add(inc_mapping[2],Length(bnd[2]));
+                Add(inv_inc_mapping[2],Length(inc_mapping[2]),Length(bnd[2]));
+                Add(knot_boundary[2],[2,loop[2]-1,loop[3]-1]);
+            fi;
+            if Length(caps[i][2])=0 then
+                right:=false;
+            else
+                right:=true;
+                if L=1 then
+                    loop:=lo_loops[2*i];
+                else
+                    loop:=hi_loops[2*i];
+                fi;
+                Add(bnd[2],[2,loop[2],loop[3]]);
+                Add(inc_mapping[2],Length(bnd[2]));
+                Add(inv_inc_mapping[2],Length(inc_mapping[2]),Length(bnd[2]));
+                Add(knot_boundary[2],[2,loop[2]-1,loop[3]-1]);
+            fi;
 
+            if not left and not right then
+            elif not left and right then
+            elif left and not right then
+            elif left and right then
+                2cell:=[];
+                tube:=Concatenation(
+                    List([2..(Length(hbars[i])/2)-2],x->x+Length(bnd[1])),
+                    List([((Length(hbars[i]))/2)+1..Length(hbars[i])-1])
+                );
+                outer:=List(tube,x->x+Length(tube));
+                mult:=(Length(tube))/8;
+
+                if mult<1 then
+                    Add(
+                        2cell,
+                        Positions(bnd[2],[2,hbars[i][1],hbars[i][3]]+scale)[3]
+                    );
+                    Add(2cell,Position(bnd[2],[2,hbars[i][1],hbars[i][2]]+scale));
+                    Add(2cell,Position(bnd[2],[2,hbars[i][3],hbars[i][4]]+scale));
+                    Add(
+                        2cell,
+                        Positions(bnd[2],[2,hbars[i][2],hbars[i][4]]+scale)[3]
+                    );
+                    2cell:=Set(2cell);
+                    Add( # boundary
+                        knot_boundary[3],
+                        Concatenation(
+                            [4],
+                            List(2cell,x->inv_inc_mapping[2][x])
+                        )
+                    );
+                    Add(2cell,4,1);
+                    Add(bnd[3],2cell); # complement
+
+                    Add(inc_mapping[3],Length(bnd[3])); # inc & inc^-1
+                    Add(inv_inc_mapping[3],Length(inc_mapping[3]),Length(bnd[3]));
+
+                    Add(cap_bound[L],Length(bnd[3])); # this 2-cell appears in
+                    # the `capping' 3-cell
+                fi;
+
+                #for j in [1..Length(tube)*2] do
+                #    Add(bnd[1],[1,0]);
+                #    Add(inc_mapping[1],Length(bnd[1]));
+                #    Add(knot_boundary[1],[1,0]);
+                #od;
+
+                #for j in [1..Length(tube)] do
+                # this is the part that intersects the vertical cylinder
+                #    Add(bnd[2],[2,tube[j],tube[j]+Length(tube)]);
+                #    Add(inc_mapping[2],Length(bnd[2]));
+                #    Add(knot_boundary[2],[2,tube[j]-4,tube[j]-4+Length(tube)]);
+                #    Add(bnd[2],[2,tube[j],tube[j]+Length(tube)]);
+                #    Add(inc_mapping[2],Length(bnd[2]));
+                #    Add(knot_boundary[2],[2,tube[j]-4,tube[j]-4+Length(tube)]);
+                #od;
+
+                #for j in [1..(Length(tube)/2)-1] do
+                # connect the above cells (i)
+                #    Add(bnd[2],[2,tube[j],tube[j+1]]);
+                #    Add(inc_mapping[2],Length(bnd[2]));
+                #    Add(knot_boundary[2],[2,tube[j]-4,tube[j+1]-4]);
+                #od;
+
+                #for j in [(Length(tube)/2)+1..Length(tube)-1] do
+                # connect the above cells (ii)
+                #    Add(bnd[2],[2,tube[j],tube[j+1]]);
+                #    Add(inc_mapping[2],Length(bnd[2]));
+                #    Add(knot_boundary[2],[2,tube[j]-4,tube[j+1]-4]);
+                #od;
+
+                #for j in [1..(Length(hbars[i])/2)-1] do
+                #    Add(2cell,Position(bnd[2],[2,hbars[i][j],hbars[i][j+1]]));
+                #od;
+                #for j in [(Length(hbars[i])/2)+1..Length(hbars[i])-1] do
+                #    Add(2cell,Position(bnd[2],[2,hbars[i][j],hbars[i][j+1]]));
+                #od;
+                #Add(2cell,Positions(bnd[2],lo_loops[2*i-1])[1]);
+                #Add(2cell,Positions(bnd[2],lo_loops[2*i])[1]);
+                #2cell:=Set(2cell);
+                #Add(2cell,Length(2cell),1);
+                #Add(bnd[3],2cell);
             fi;
         od;
 
-        return caps;
     end;
 ################################################################################
     CappedCylinder(bound);
 
-    return [bound,knot_boundary,inc_mapping];
+    return [bound,knot_boundary,inc_mapping, inv_inc_mapping];
 end;
 i:=[
     [ [ 2, 4 ], [ 1, 3 ], [ 2, 4 ], [ 1, 3 ] ],
