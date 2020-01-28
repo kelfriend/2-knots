@@ -620,8 +620,8 @@
     CappedCylinder:=function(bnd)
         local
             loops, lo_loops, hi_loops,
-            caps, i, h, v, j, scale, L, left, right,
-            loop, 2cell, tube, outer, mult;
+            caps, i, h, v, j, len1, scale, L, left, right,
+            loop, 2cell, tube, outer, mult, starting;
 
         loops:=Filtered(bnd[2],x->Length(Positions(bnd[2],x))=2);
         lo_loops:=Set(loops{[1..(Length(loops)/2)-2]});
@@ -687,11 +687,11 @@
             fi;
         od;
 
+        len1:=Length(bnd[1])/2;
     # tube time - begin with horizontals in either layer
         for i in [1..grid_number] do
             if levels[i]=1 then # needed to allow the loop to work in both layers
-                scale:=8*grid_number+2;
-                scale:=[0,scale,scale];
+                scale:=[0,len1,len1];
                 L:=2;
             else
                 scale:=[0,0,0];
@@ -706,8 +706,8 @@
                 else
                     loop:=hi_loops[2*i-1];
                 fi;
-                Add(bnd[2],[2,loop[2],loop[3]]);
-                Add(inc_mapping[2],Length(bnd[2]));
+                Add(bnd[2],[2,loop[2],loop[3]]); # an extra loop is added to allow
+                Add(inc_mapping[2],Length(bnd[2])); # 2-cells to mesh together
                 Add(inv_inc_mapping[2],Length(inc_mapping[2]),Length(bnd[2]));
                 Add(knot_boundary[2],[2,loop[2]-1,loop[3]-1]);
             fi;
@@ -761,10 +761,76 @@
                     Add(bnd[3],2cell); # complement
 
                     Add(inc_mapping[3],Length(bnd[3])); # inc & inc^-1
-                    Add(inv_inc_mapping[3],Length(inc_mapping[3]),Length(bnd[3]));
+                    inv_inc_mapping[3][Length(bnd[3])]:=Length(inc_mapping[3]);
 
                     Add(cap_bound[L],Length(bnd[3])); # this 2-cell appears in
                     # the `capping' 3-cell
+                else
+                    # add more 0-cells, 1-cells and 2-cells to create space for
+                    # horizontal bars to intersect vertical ones
+                    starting:=List([1..3],x->[Length(bnd[x]),Length(knot_boundary[x])]);
+                    for i in [1..mult*4] do
+                        for j in [1,2] do
+                            Add(bnd[1],[1,0]);
+                            Add(inc_mapping[1],Length(bnd[1]));
+                            Add(knot_boundary[1],[1,0]);
+                            inv_inc_mapping[1][Length(bnd[1])]:=Length(inc_mapping[1]);
+                        od;
+                        
+                        for j in [1,2] do # loops
+                            Add(bnd[2],[2,Length(bnd[1])-1,Length(bnd[1])]);
+                            Add(inc_mapping[2],Length(bnd[2]));
+                            Add(knot_boundary[2],[2,Length(knot_boundary[1])-1,Length(knot_boundary[1])]);
+                            inv_inc_mapping[2][Length(bnd[2])]:=Length(inc_mapping[2]);
+                        od;
+                    od;
+
+                    for i in [starting[1][1]+1..Length(bnd[1])-2] do
+                        Add(bnd[2],[2,i,i+2]); # joining the new 0-cells
+                        Add(inc_mapping[2],Length(bnd[2]));
+                    od;
+                    for i in [starting[1][2]+1..Length(knot_boundary[1])-2] do
+                        Add(knot_boundary[2],[2,i,i+2]);
+                        inv_inc_mapping[2][inc_mapping[2][Length(knot_boundary[2])]]:=Length(knot_boundary[2]);
+                    od;
+
+                    for i in [starting[1][1]+1,starting[1][1]+3..Length(bnd[1])-3] do
+                        for j in [1,2] do
+                            Add(
+                                bnd[3],
+                                [
+                                    4,
+                                    Positions(bnd[2],[2,i,i+1])[j],
+                                    Positions(bnd[2],[2,i+2,i+3])[j],
+                                    Position(bnd[2],[2,i,i+2]),
+                                    Position(bnd[2],[2,i+1,i+3])
+                                ]
+                            );
+                            Add(inc_mapping[3],Length(bnd[3]));
+                        od;
+                    od;
+                    for i in [starting[1][2]+1,starting[1][2]+3..Length(knot_boundary[1])-3] do
+                        for j in [1..2] do
+                            Add(
+                                knot_boundary[3],
+                                [
+                                    4,
+                                    Positions(knot_boundary[2],[2,i,i+1])[j],
+                                    Positions(knot_boundary[2],[2,i+2,i+3])[j],
+                                    Position(knot_boundary[2],[2,i,i+2]),
+                                    Position(knot_boundary[2],[2,i+1,i+3])
+                                ]
+                            );
+                            inv_inc_mapping[3][inc_mapping[3][Length(knot_boundary[3])]]:=Length(knot_boundary[3]);
+                        od;
+                    od;
+                    
+                    for i in [1..mult*4] do
+                        Add(bnd[1],[1,0]);
+                        Add(inc_mapping[1],Length(bnd[1]));
+                        Add(knot_boundary[1],[1,0]);
+                        inv_inc_mapping[1][Length(bnd[1])]:=Length(inc_mapping[1]);
+                    od;
                 fi;
 
                 #for j in [1..Length(tube)*2] do
