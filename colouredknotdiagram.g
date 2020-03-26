@@ -1,0 +1,2 @@
+ColouredKnotDiagram:=function()
+end;
