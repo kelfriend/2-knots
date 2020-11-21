@@ -8,9 +8,9 @@ ArcDiagramToTubularSurface:=function(arc)
         path, unselectedEdges, sourceORtarget,
         faceloops, x, ClockwiseTurn, 2cell, sORt,
         ori, e1, e0, loops, present_loops, vertices,
-        check, l0, l1, l2, IsEdgeInDuplicate, copy1,
-        hbars2, vbars2, copy2, 3cell, colour, lcap,
-        ucap, colour_;
+        check, l0, l1, l2, l0_, l1_, l2_, IsEdgeInDuplicate,
+        copy1, hbars2, vbars2, copy2, 3cell, colour, lcap,
+        ucap, floor, ceiling, cap, cap_, loop, colour_;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -346,9 +346,9 @@ ArcDiagramToTubularSurface:=function(arc)
 # the direct product of the disk with [0,1]
 ####################################################################################
 # make a duplicate of the disk
-    l0:=Length(bnd[1]);
-    l1:=Length(bnd[2]);
-    l2:=Length(bnd[3]);
+    l0:=Length(bnd[1]); l0_:=Length(sub[1]);
+    l1:=Length(bnd[2]); l1_:=Length(sub[2]);
+    l2:=Length(bnd[3]); l2_:=Length(sub[3]);
 
     IsEdgeInDuplicate:=function(k)
         local x;
@@ -419,7 +419,7 @@ ArcDiagramToTubularSurface:=function(arc)
 # to its duplicate
     for i in [1..l0] do
         Add(bnd[2],[2,i,i+l0]);
-        if i in loops then
+        if (i in loops) and (not i in [1,l0]) then
             Add(sub[2],Length(bnd[2]));
         fi;
     od;
@@ -470,9 +470,142 @@ ArcDiagramToTubularSurface:=function(arc)
 
 # join the loops according to crs
 ####################################################################################
-    colour:=List([1..4],x->List([1..Length(bnd[x])],y->[]));
+    colour:=List([1..4],x->[]);
     lcap:=[];
     ucap:=[];
+    
+    if not IsBound(crs) then
+        lcap:=Filtered([1..l2],y->not y in sub[3] and bnd[3][y][1]<>2);
+        ucap:=Filtered([l2+1..2*l2],y->not y in sub[3] and bnd[3][y][1]<>2);
+        # associate each 2-cell of sub to a given hbar / vbar
+        # then create a new `capping' 2-cell to join the holes
+        # add a 3-cell inside the cap so that bnd remains ~= B3
+        floor:=List([1..Length(vbars)],x->[]);
+        ceiling:=List([1..Length(hbars)],x->[]);
+        for i in [1..2*l2_] do
+            x:=bnd[3][sub[3][i]]; #            all 0-cells in
+            x:=x{[2..x[1]+1]}; #               a given 2-cell
+            x:=List(x,y->bnd[2][y]{[2,3]}); #  of sub
+            x:=Set(Concatenation(x));
+            if i<=l2_ then
+                for j in [1..Length(vbars)] do
+                    if Intersection(vbars[j],x)<>[] then
+                        Add(floor[j],sub[3][i]);
+                    fi;
+                od;
+            elif i>l2_ and i<=2*l2_ then
+                for j in [1..Length(hbars)] do
+                    if Intersection(hbars[j]+l0,x)<>[] then
+                        Add(ceiling[j],sub[3][i]);
+                    fi;
+                od;
+            fi;
+        od;
+        for i in [1..Length(floor)] do
+            cap:=floor[i]*1;
+            cap_:=Set( # 1-skeleton of all 2-cells in this cap
+                Concatenation(
+                    List(
+                        floor[i],
+                        x->bnd[3][x]{[2..bnd[3][x][1]+1]}
+                    )
+                )
+            );
+            for j in [1..Length(cap_)*1] do
+# swap the loops to keep things regular
+                loop:=Positions(bnd[2],bnd[2][cap_[j]]);
+                if Length(loop)=2 then
+                    Add(
+                        cap,
+                        Position(
+                            List(bnd[3],x->Set(x)),
+                            Set([2,loop[1],loop[2]])
+                        )
+                    );
+                    Unbind(cap_[j]);
+                    Add(cap_,Filtered(loop,y->y<>j)[1]);
+                fi;
+            od;
+            cap_:=Set(cap_);
+            for j in [1..Length(cap_)] do
+# filter out the horizontal 1-cells at each crossing pt.
+                if true in List(
+                        crossings,
+                        y->Intersection(
+                            y,
+                            bnd[2][cap_[j]]
+                        )<>[]
+                    ) and
+                    bnd[2][cap_[j]][3]=bnd[2][cap_[j]][2]+1 then
+                        Unbind(cap_[j]);
+                fi;
+            od;
+            cap_:=Set(cap_);
+            Add(cap_,Length(cap_),1); # this is the cap connecting the holes
+            Add(bnd[3],cap_);
+            Add(sub[3],Length(bnd[3]));
+            Add(lcap,Length(bnd[3])); # it will be in the boundary of the final cap
+            
+            Add(cap,Length(bnd[3])); # fill in the gap so that bnd ~=B3
+            Add(cap,Length(cap),1);
+            Add(bnd[4],cap);
+        od;
+# this can be done much nicer but ctrl+c ctrl+v works too
+        for i in [1..Length(ceiling)] do
+            cap:=ceiling[i]*1;
+            cap_:=Set( # 1-skeleton of all 2-cells in this cap
+                Concatenation(
+                    List(
+                        ceiling[i],
+                        x->bnd[3][x]{[2..bnd[3][x][1]+1]}
+                    )
+                )
+            );
+            for j in [1..Length(cap_)] do
+# swap the loops to keep things regular
+                loop:=Positions(bnd[2],bnd[2][cap_[j]]);
+                if Length(loop)=2 then
+                    Add(
+                        cap,
+                        Position(
+                            List(bnd[3],x->Set(x)),
+                            Set([2,loop[1],loop[2]])
+                        )
+                    );
+                    Unbind(cap_[j]);
+                    Add(cap_,Filtered(loop,y->y<>j)[1]);
+                fi;
+            od;
+            cap_:=Set(cap_);
+            for j in [1..Length(cap_)] do
+# filter out the vertical 1-cells at each crossing pt.
+                if true in List(
+                        List(
+                            crossings,
+                            z->z+l0
+                        ),
+                        y->Intersection(
+                            y,
+                            bnd[2][cap_[j]]
+                        )<>[]
+                    ) and
+                    bnd[2][cap_[j]][3]<>bnd[2][cap_[j]][2]+1 then
+                        Unbind(cap_[j]);
+                fi;
+            od;
+            cap_:=Set(cap_);
+            Add(cap_,Length(cap_),1); # this is the cap connecting the holes
+            Add(bnd[3],cap_);
+            Add(sub[3],Length(bnd[3]));
+            Add(ucap,Length(bnd[3])); # it will be in the boundary of the final cap
+            
+            Add(cap,Length(bnd[3])); # fill in the gap so that bnd ~=B3
+            Add(cap,Length(cap),1);
+            Add(bnd[4],cap);
+        od;
+    else
+        return fail;
+    fi;
 ####################################################################################
 
 # add a cap to both ends of D x [0,1] 
@@ -487,7 +620,7 @@ ArcDiagramToTubularSurface:=function(arc)
     );
     Add(lcap,Length(bnd[3]));
     lcap:=Set(lcap);
-    lcap:=Concatenation([Length(lcap)],lcap);
+    Add(lcap,Length(lcap),1);
     Add(bnd[4],lcap);
     Add(
         bnd[3],
@@ -499,7 +632,7 @@ ArcDiagramToTubularSurface:=function(arc)
     );
     Add(ucap,Length(bnd[3]));
     ucap:=Set(ucap);
-    ucap:=Concatenation([Length(ucap)],ucap);
+    Add(ucap,Length(ucap),1);
     Add(bnd[4],ucap);
 ####################################################################################
 
@@ -507,12 +640,14 @@ ArcDiagramToTubularSurface:=function(arc)
 ####################################################################################
     for i in [1..4] do
         for j in [1..Length(bnd[i])] do
-            if colour[i][j]=[] then
+            if not IsBound(colour[i][j]) then
                 colour[i][j]:=[0];
             fi;
         od;
     od;
     colour_:={n,k}->colour[n+1][k];
 ####################################################################################
-    return [bnd,sub];
+    x:=CWSubcomplexToRegularCWMap([RegularCWComplex(bnd),sub]);
+    x!.colour:=colour_;
+    return x;
 end;
