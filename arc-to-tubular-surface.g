@@ -10,7 +10,9 @@ ArcDiagramToTubularSurface:=function(arc)
         ori, e1, e0, loops, present_loops, vertices,
         check, l0, l1, l2, l0_, l1_, l2_, IsEdgeInDuplicate,
         copy1, hbars2, vbars2, copy2, 3cell, colour, lcap,
-        ucap, floor, ceiling, cap, cap_, loop, colour_;
+        ucap, floor, ceiling, cap, cap_, loop, colour_,
+        leftovers, pos, HorizontalOrVertical, l, y,
+        SubcapTo3cell;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -329,7 +331,7 @@ ArcDiagramToTubularSurface:=function(arc)
             e1:=ClockwiseTurn(ori,e1);
         od;
         Add(2cell,Length(2cell),1);
-        if not Set(2cell) in List(bnd[3],x->Set(x)) then
+        if not Set(2cell) in List(bnd[3],Set) then
             for i in Filtered(2cell{[2..Length(2cell)]},y->y in unselectedEdges) do
                 Unbind(unselectedEdges[Position(unselectedEdges,i)]);
             od;
@@ -471,141 +473,208 @@ ArcDiagramToTubularSurface:=function(arc)
 # join the loops according to crs
 ####################################################################################
     colour:=List([1..4],x->[]);
-    lcap:=[];
-    ucap:=[];
-    
+        
     if not IsBound(crs) then
-        lcap:=Filtered([1..l2],y->not y in sub[3] and bnd[3][y][1]<>2);
-        ucap:=Filtered([l2+1..2*l2],y->not y in sub[3] and bnd[3][y][1]<>2);
-        # associate each 2-cell of sub to a given hbar / vbar
-        # then create a new `capping' 2-cell to join the holes
-        # add a 3-cell inside the cap so that bnd remains ~= B3
-        floor:=List([1..Length(vbars)],x->[]);
-        ceiling:=List([1..Length(hbars)],x->[]);
-        for i in [1..2*l2_] do
-            x:=bnd[3][sub[3][i]]; #            all 0-cells in
-            x:=x{[2..x[1]+1]}; #               a given 2-cell
-            x:=List(x,y->bnd[2][y]{[2,3]}); #  of sub
-            x:=Set(Concatenation(x));
-            if i<=l2_ then
-                for j in [1..Length(vbars)] do
-                    if Intersection(vbars[j],x)<>[] then
-                        Add(floor[j],sub[3][i]);
-                    fi;
-                od;
-            elif i>l2_ and i<=2*l2_ then
-                for j in [1..Length(hbars)] do
-                    if Intersection(hbars[j]+l0,x)<>[] then
-                        Add(ceiling[j],sub[3][i]);
-                    fi;
-                od;
+        crs:=List([1..Length(crossings)],x->1);
+    fi;
+
+# start with the lower caps, they're more straight forward
+    lcap:=Filtered([1..l2],y->not y in sub[3] and bnd[3][y][1]<>2); # lower 'dome'
+    cap:=[]; # 3-cells inside caps for each horizontal/vertical tube in lower dome
+    floor:=[];
+    for i in [1..l2_] do
+        Add(
+            floor,
+            bnd[3][sub[3][i]]{[2..bnd[3][sub[3][i]][1]+1]}*1
+        );
+        Add(cap,[sub[3][i]]);
+    od;
+    leftovers:=Difference(sub[2]{[1..l1_]},Concatenation(floor));
+    leftovers:=Filtered( # are there any stray loops
+        leftovers, # that need to be capped off?
+        x->Intersection(
+            Positions(bnd[2],[2,bnd[2][x][2],bnd[2][x][3]]),
+            Concatenation(floor)
+        )=[]
+    );
+    for i in [1..Length(leftovers)/2] do
+        pos:=Position( # if leftovers is non-empty
+            bnd[3], # add those already existing
+            [ # 2-cells (with two 1-cells in their
+                2, # boundaries) of bnd to sub
+                leftovers[2*i-1],
+                leftovers[2*i]
+            ]
+        );
+        Add(sub[3],pos);
+        Add(lcap,pos);
+    od;
+    for i in [1..Length(floor)] do # floor is now a list whose length is how many
+        for j in [i+1..Length(floor)] do # 2-cells we have to add to both sub & bnd
+            if Intersection(floor[i],floor[j])<>[] then
+                floor[i]:=Concatenation(floor[i],floor[j]);
+                floor[j]:=[];
+                cap[i]:=Concatenation(cap[i],cap[j]);
+                cap[j]:=[];
             fi;
         od;
-        for i in [1..Length(floor)] do
-            cap:=floor[i]*1;
-            cap_:=Set( # 1-skeleton of all 2-cells in this cap
+    od;
+    floor:=Set(Filtered(List(floor,Set),x->x<>[]));
+    cap:=Set(Filtered(List(cap,Set),x->x<>[]));
+    for i in [1..Length(floor)] do # we need to add some more 1-cells if two
+        for j in [1..Length(floor[i])] do # given bars intersect at a loop
+            if floor[i][j]<>0 then
+                pos:=Positions(
+                    bnd[2],
+                    [
+                        2,
+                        bnd[2][floor[i][j]][2],
+                        bnd[2][floor[i][j]][3]
+                    ]
+                );
+                if Length(pos)=2 then
+                    for k in [i+1..Length(floor)] do
+                        cell:=Filtered(pos,x->x<>floor[i][j])[1];
+                        if cell in floor[k] then
+                            Add(
+                                bnd[2],
+                                [
+                                    2,
+                                    bnd[2][floor[i][j]][2],
+                                    bnd[2][floor[i][j]][3]
+                                ]
+                            );
+                            Add(sub[2],Length(bnd[2]));
+                            Add(floor[i],Length(bnd[2]));
+                            Add(floor[k],Length(bnd[2]));
+                            floor[i][j]:=0;
+                            floor[k][Position(floor[k],cell)]:=0;
+                        fi;
+                    od;
+                fi;
+            fi;
+        od;
+    od;
+    floor:=List(floor,x->Filtered(x,y->y<>0));
+    for i in [1..Length(floor)] do # swap the loops should they occur
+        for j in [1..Length(floor[i])] do # twice in bnd[2]
+            pos:=Positions(bnd[2],bnd[2][floor[i][j]]);
+            if Length(pos)=2 then
+                floor[i][j]:=Filtered(pos,x->not x in floor[i])[1];
+            fi;
+        od;
+    od;
+    # filter out either the vertical/horizontal bars at each crossing
+    # depending on if the given bar is horizontal/vertical respectively
+    HorizontalOrVertical:=function(l)
+        local 0_cells_l;
+        0_cells_l:=Set(
+            Concatenation(
+                List(
+                    l,
+                    x->bnd[2][x]{[2,3]}
+                )
+            )
+        );
+        if true in List(hbars,x->IsSubset(x,0_cells_l)) then
+            return "horizontal";
+        elif true in List(vbars,x->IsSubset(x,0_cells_l)) then
+            return "vertical";
+        else
+            return "neither";
+        fi;
+    end;
+    # cap needs some more 2-cells, also to be sorted into fewer
+    # sublists if any sub-element of cap intersects with another
+    cap_:=List(cap,x->List(x,y->bnd[3][y]{[2..bnd[3][y][1]+1]}));
+    cap_:=List(cap_,x->List(x,y->List(y,z->bnd[2][z])));
+    cap_:=List(cap_,Concatenation);
+    for i in [1..Length(cap_)] do
+        for j in [1..Length(cap_[i])] do
+            if Length(Positions(bnd[2],cap_[i][j]))>=2 then
+                Add(
+                    cap[i],
+                    Filtered(
+                        [1..Length(bnd[3])],
+                        x->bnd[3][x][1]=2 and
+                        cap_[i][j] in List(bnd[3][x]{[2,3]},y->bnd[2][y])
+                    )[1]
+                );
+            fi;
+        od;
+    od;
+    for i in [1..Length(cap)] do
+        for j in [i+1..Length(cap)] do
+            if Intersection(cap[i],cap[j])<>[] then
+                cap[i]:=Concatenation(cap[i],cap[j]);
+                cap[j]:=[];
+            fi;
+        od;
+    od;
+    cap:=Filtered(List(cap,Set),x->x<>[]);
+    for i in [1..Length(floor)] do
+        if HorizontalOrVertical(floor[i])="horizontal" then
+            # remove vertical cells at crossing
+            for j in [1..Length(floor[i])] do
+                cell:=List(floor[i],x->bnd[2][x]{[2,3]})[j];
+                for k in [1..Length(crossings)] do
+                    if Length(Intersection(cell,crossings[k]))=2 and
+                        cell[1]<>cell[2]-1 then
+                            Unbind(floor[i][j]);
+                    fi;
+                od;
+            od;
+        elif HorizontalOrVertical(floor[i])="vertical" then
+            # remove horizontal cells at crossing
+            for j in [1..Length(floor[i])] do
+                cell:=List(floor[i],x->bnd[2][x]{[2,3]})[j];
+                for k in [1..Length(crossings)] do
+                    if Length(Intersection(cell,crossings[k]))=2 and
+                        cell[1]=cell[2]-1 then
+                            Unbind(floor[i][j]);
+                    fi;
+                od;
+            od;
+        fi;
+    od;
+    floor:=List(floor,Set);
+    # finally, we can create the caps as well as add some 3-cells to bnd
+    SubcapTo3cell:=function(i)
+        for j in [1..Length(cap)] do
+            if Intersection(
                 Concatenation(
                     List(
-                        floor[i],
-                        x->bnd[3][x]{[2..bnd[3][x][1]+1]}
-                    )
-                )
-            );
-            for j in [1..Length(cap_)*1] do
-# swap the loops to keep things regular
-                loop:=Positions(bnd[2],bnd[2][cap_[j]]);
-                if Length(loop)=2 then
-                    Add(
-                        cap,
-                        Position(
-                            List(bnd[3],x->Set(x)),
-                            Set([2,loop[1],loop[2]])
+                        cap[j],
+                        x->Concatenation(
+                            List(
+                                bnd[3][x]{[2..bnd[3][x][1]+1]},
+                                y->bnd[2][y]{[2,3]}
+                            )
                         )
-                    );
-                    Unbind(cap_[j]);
-                    Add(cap_,Filtered(loop,y->y<>j)[1]);
-                fi;
-            od;
-            cap_:=Set(cap_);
-            for j in [1..Length(cap_)] do
-# filter out the horizontal 1-cells at each crossing pt.
-                if true in List(
-                        crossings,
-                        y->Intersection(
-                            y,
-                            bnd[2][cap_[j]]
-                        )<>[]
-                    ) and
-                    bnd[2][cap_[j]][3]=bnd[2][cap_[j]][2]+1 then
-                        Unbind(cap_[j]);
-                fi;
-            od;
-            cap_:=Set(cap_);
-            Add(cap_,Length(cap_),1); # this is the cap connecting the holes
-            Add(bnd[3],cap_);
-            Add(sub[3],Length(bnd[3]));
-            Add(lcap,Length(bnd[3])); # it will be in the boundary of the final cap
-            
-            Add(cap,Length(bnd[3])); # fill in the gap so that bnd ~=B3
-            Add(cap,Length(cap),1);
-            Add(bnd[4],cap);
-        od;
-# this can be done much nicer but ctrl+c ctrl+v works too
-        for i in [1..Length(ceiling)] do
-            cap:=ceiling[i]*1;
-            cap_:=Set( # 1-skeleton of all 2-cells in this cap
-                Concatenation(
-                    List(
-                        ceiling[i],
-                        x->bnd[3][x]{[2..bnd[3][x][1]+1]}
                     )
-                )
-            );
-            for j in [1..Length(cap_)] do
-# swap the loops to keep things regular
-                loop:=Positions(bnd[2],bnd[2][cap_[j]]);
-                if Length(loop)=2 then
-                    Add(
-                        cap,
-                        Position(
-                            List(bnd[3],x->Set(x)),
-                            Set([2,loop[1],loop[2]])
-                        )
-                    );
-                    Unbind(cap_[j]);
-                    Add(cap_,Filtered(loop,y->y<>j)[1]);
-                fi;
-            od;
-            cap_:=Set(cap_);
-            for j in [1..Length(cap_)] do
-# filter out the vertical 1-cells at each crossing pt.
-                if true in List(
-                        List(
-                            crossings,
-                            z->z+l0
-                        ),
-                        y->Intersection(
-                            y,
-                            bnd[2][cap_[j]]
-                        )<>[]
-                    ) and
-                    bnd[2][cap_[j]][3]<>bnd[2][cap_[j]][2]+1 then
-                        Unbind(cap_[j]);
-                fi;
-            od;
-            cap_:=Set(cap_);
-            Add(cap_,Length(cap_),1); # this is the cap connecting the holes
-            Add(bnd[3],cap_);
-            Add(sub[3],Length(bnd[3]));
-            Add(ucap,Length(bnd[3])); # it will be in the boundary of the final cap
-            
-            Add(cap,Length(bnd[3])); # fill in the gap so that bnd ~=B3
-            Add(cap,Length(cap),1);
-            Add(bnd[4],cap);
+                ),
+                Concatenation(List(floor[i],x->bnd[2][x]{[2,3]}))
+            )<>[] then
+                return j;
+            fi;
         od;
-    else
-        return fail;
-    fi;
+    end;
+    for i in [1..Length(floor)] do
+        cell:=floor[i]*1;
+        Add(cell,Length(cell),1);
+        Add(bnd[3],cell);
+        Add(sub[3],Length(bnd[3]));
+        Add(lcap,Length(bnd[3]));
+        Add(cap[SubcapTo3cell(i)],Length(bnd[3]));
+    od;
+    for i in [1..Length(cap)] do
+        cell:=cap[i]*1;
+        Add(cell,Length(cell),1);
+        Add(bnd[4],cell);
+    od;
+
+# now for the upper loops, 0 in crs leads to a very elaborate CW-structure
+
 ####################################################################################
 
 # add a cap to both ends of D x [0,1] 
@@ -622,7 +691,7 @@ ArcDiagramToTubularSurface:=function(arc)
     lcap:=Set(lcap);
     Add(lcap,Length(lcap),1);
     Add(bnd[4],lcap);
-    Add(
+    if false then Add(
         bnd[3],
         [
             2,
@@ -633,7 +702,7 @@ ArcDiagramToTubularSurface:=function(arc)
     Add(ucap,Length(bnd[3]));
     ucap:=Set(ucap);
     Add(ucap,Length(ucap),1);
-    Add(bnd[4],ucap);
+    Add(bnd[4],ucap); fi;
 ####################################################################################
 
 # add colour
