@@ -12,7 +12,7 @@ ArcDiagramToTubularSurface:=function(arc)
         copy1, hbars2, vbars2, copy2, 3cell, colour, lcap,
         ucap, floor, ceiling, cap, cap_, loop, colour_,
         leftovers, pos, HorizontalOrVertical, l, y,
-        SubcapTo3cell, IntersectingCylinders;
+        SubcapTo3cell, IntersectingCylinders, l0__, l1__, l2__;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -415,6 +415,7 @@ ArcDiagramToTubularSurface:=function(arc)
                     Add(sub[3],i);
         fi;
     od;
+    l0__:=Length(bnd[1]); l1__:=Length(sub[2]); l2__:=Length(sub[3]);
 
 # join the original disk to the copy
 # each n-cell of the disk yields an (n+1)-cell which connects it
@@ -1000,8 +1001,37 @@ ArcDiagramToTubularSurface:=function(arc)
             ]
         );
     end;
-    IntersectingCylinders(33,34,37,38);
-    return [bnd,sub];
+
+    for i in [l2_+1..l2__] do
+        Add(
+            ceiling,
+            bnd[3][sub[3][i]]{[2..bnd[3][sub[3][i]][1]+1]}*1
+        );
+        Add(cap,[sub[3][i]]);
+    od;
+    leftovers:=Difference(sub[2]{[l1_+1..l1__]},Concatenation(ceiling));
+    leftovers:=Filtered( # are there any stray loops
+        leftovers, # that need to be capped off?
+        x->Intersection(
+            Positions(bnd[2],[2,bnd[2][x][2],bnd[2][x][3]]),
+            Concatenation(ceiling)
+        )=[]
+    );
+    for i in [1..Length(leftovers)/2] do
+        pos:=Position( # if leftovers is non-empty
+            bnd[3], # add those already existing
+            [ # 2-cells (with two 1-cells in their
+                2, # boundaries) of bnd to sub
+                leftovers[2*i-1],
+                leftovers[2*i]
+            ]
+        );
+        Add(sub[3],pos);
+        Add(ucap,pos);
+    od;
+    
+
+    return [ceiling,cap];
 ####################################################################################
 
 # add a cap to both ends of D x [0,1] 
@@ -1018,7 +1048,7 @@ ArcDiagramToTubularSurface:=function(arc)
     lcap:=Set(lcap);
     Add(lcap,Length(lcap),1);
     Add(bnd[4],lcap);
-    if false then Add(
+    Add(
         bnd[3],
         [
             2,
@@ -1029,7 +1059,7 @@ ArcDiagramToTubularSurface:=function(arc)
     Add(ucap,Length(bnd[3]));
     ucap:=Set(ucap);
     Add(ucap,Length(ucap),1);
-    Add(bnd[4],ucap); fi;
+    Add(bnd[4],ucap);
 ####################################################################################
 
 # add colour
