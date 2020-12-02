@@ -12,7 +12,8 @@ ArcDiagramToTubularSurface:=function(arc)
         copy1, hbars2, vbars2, copy2, 3cell, colour, lcap,
         ucap, floor, ceiling, cap, cap_, loop, colour_,
         leftovers, pos, HorizontalOrVertical, l, y,
-        SubcapTo3cell, IntersectingCylinders, l0__, l1__, l2__;
+        SubcapTo3cell, IntersectingCylinders, l0__, l1__,
+        l2__, 0_ceiling, crs_int;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -811,6 +812,7 @@ ArcDiagramToTubularSurface:=function(arc)
     ucap:=Filtered([l2+1..2*l2],y->not y in sub[3] and bnd[3][y][1]<>2);
     cap:=[];
     ceiling:=[];
+    crs_int:=[];
 
     IntersectingCylinders:=function(a,b,c,d)
         local n, i, m, j, l;
@@ -955,14 +957,21 @@ ArcDiagramToTubularSurface:=function(arc)
             [
                 8,
                 Position(
-                    bnd[3],
-                    [
-                        4,
-                        Position(bnd[2],[2,a,b]),
-                        Position(bnd[2],[2,c,d]),
-                        Position(bnd[2],[2,a,c]),
-                        Position(bnd[2],[2,b,d])
-                    ]
+                    List(
+                        bnd[3],
+                        x->Concatenation([x[1]],Set(x{[2..x[1]+1]}))
+                    ),
+                    Concatenation(
+                        [4],
+                        Set(
+                            [
+                                Position(bnd[2],[2,a,b]),
+                                Position(bnd[2],[2,c,d]),
+                                Position(bnd[2],[2,a,c]),
+                                Position(bnd[2],[2,b,d])
+                            ]
+                        )
+                    )
                 ),
                 l,
                 l+2,
@@ -1029,9 +1038,70 @@ ArcDiagramToTubularSurface:=function(arc)
         Add(sub[3],pos);
         Add(ucap,pos);
     od;
-    
+    0_ceiling:=List(ceiling,x->List(x,y->bnd[2][y]{[2,3]}));
+    0_ceiling:=List(0_ceiling,x->Set(Concatenation(x)));
+    for i in [1..Length(0_ceiling)] do # for each self-intersection, add
+        for j in [1..Length(crossings)] do # the additional structure
+            if Length(Intersection(0_ceiling[i],crossings[j]+l0))=4 and
+                crs[j]=0 then
+                    IntersectingCylinders(
+                        0_ceiling[i][1],
+                        0_ceiling[i][3],
+                        0_ceiling[i][2],
+                        0_ceiling[i][4]
+                    );
+            fi;
+        od;
+    od;
+    for i in [1..Length(0_ceiling)] do
+        for j in [i+1..Length(0_ceiling)] do
+            int:=Intersection(0_ceiling[i],0_ceiling[j]);
+            if int<>[] then # if a horizontal and vertical bar intersect at a
+            # loop in the corner, add a new loop
+                pos:=Positions(bnd[2],[2,Minimum(int),Maximum(int)]);
+                if Length(pos)=2 then
+                    Add(bnd[2],[2,Minimum(int),Maximum(int)]);
+                    Add(sub[2],Length(bnd[2]));
+                    ceiling[i]
+                    [
+                        Position(
+                            ceiling[i],
+                            Intersection(ceiling[i],pos)[1]
+                        )
+                    ]:=Length(bnd[2]);
+                    ceiling[j]
+                    [
+                        Position(
+                            ceiling[j],
+                            Intersection(ceiling[j],pos)[1]
+                        )
+                    ]:=Length(bnd[2]);
+                fi;
+            fi;
+        od;
+    od;
+    for i in [1..Length(ceiling)] do
+        for j in [1..Length(ceiling[i])] do
+        # swap the loops at the end of a non-intersecting cap 
+        # to make things join up properly
+            pos:=Positions(
+                bnd[2],
+                [
+                    2,
+                    bnd[2][ceiling[i][j]][2],
+                    bnd[2][ceiling[i][j]][3]
+                ]
+            );
+            if Length(pos)=2 then
+                ceiling[i][j]:=Filtered(pos,x->x<>ceiling[i][j])[1];
+            fi;
+        od;
+    od;
+    # now to finally start creating caps--we'll start with horizontal caps as they
+    # do not need the extra 3-cells that the vertical caps will need at
+    # self-intersection points
 
-    return [ceiling,cap];
+    return [0_ceiling,ceiling,cap];
 ####################################################################################
 
 # add a cap to both ends of D x [0,1] 
