@@ -15,7 +15,9 @@ ArcDiagramToTubularSurface:=function(arc)
         SubcapTo3cell, IntersectingCylinders, l0__, l1__,
         l2__, 0_ceiling, crs_int, h_0_ceiling, h_ceiling,
         h_cap, h_2_bnd, h_3_bnd, nr_crs, v_crossings,
-        h_crossings;
+        h_crossings, v_0_ceiling, v_ceiling, v_cap,
+        minmax, v_2_bnd, v_3_bnd, perm, crs_2_cells,
+        v_cap_sep, v_ceiling_sep, 3cells, int1, int2;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -301,7 +303,7 @@ ArcDiagramToTubularSurface:=function(arc)
     path:=Clockwise(neighbours);
 
     unselectedEdges:=List([1..Length(bnd[2])-2]);
-    unselectedEdges:=Concatenation(unselectedEdges,unselectedEdges);
+    unselectedEdges:=Concatenation(unselectedEdges,unselectedEdges); # use Append() instead
     Add(unselectedEdges,Length(bnd[2])-1);
     Add(unselectedEdges,Length(bnd[2]));
 
@@ -677,13 +679,15 @@ ArcDiagramToTubularSurface:=function(arc)
         Add(bnd[4],cell);
     od;
 
-# now for the upper loops, 0 in crs leads to a very elaborate CW-structure
+# now for the upper caps, 0 in crs leads to a very elaborate CW-structure
     ucap:=Filtered([l2+1..2*l2],y->not y in sub[3] and bnd[3][y][1]<>2);
     cap:=[];
     ceiling:=[];
     crs_int:=[];
     h_2_bnd:=[];
     h_3_bnd:=[];
+    v_2_bnd:=[];
+    v_3_bnd:=[];
     IntersectingCylinders:=function(a,b,c,d)
         local n, i, m, j, l;
 # attaches to a 0 crossing some additional regular CW-structure
@@ -711,6 +715,7 @@ ArcDiagramToTubularSurface:=function(arc)
             fi;
         od;
         Add(h_2_bnd,[[a,b,c,d],[m,m+1,m+2,m+3,m+4,m+14]]);
+        Add(v_2_bnd,[[a,b,c,d],[[m,m+1,m+4],[m+2,m+3,m+14]]]);
         # 2-skeleton of intersection
         l:=1*Length(bnd[3])+1;
         Add( # l
@@ -746,10 +751,35 @@ ArcDiagramToTubularSurface:=function(arc)
             Add(sub[3],Length(bnd[3]));                                           ##
         od;                                                                       ##
         ############################################################################
-        Add(h_3_bnd,[[a,b,c,d],[l,l+1,l+2,l+3,l+4,l+5,l+6,l+7]]);
         # from this point onwards, cells added are only present in bnd, not sub
         Add(bnd[3],[2,m+4,m+5]); # l+8
-        Add(bnd[3],[2,m+4,m+5]); # l+9
+        Add(bnd[3],[2,m+14,m+15]); # l+9
+        Add(v_3_bnd,[[a,b,c,d],[[l,l+8],[l+1,l+9]]]);
+        Add( # l+10
+            bnd[3],
+            [
+                6,
+                Position(bnd[2],[2,a,c]),
+                m,
+                m+2,
+                m+8,
+                m+12,
+                m+16
+            ]
+        );
+        Add( # l+11
+            bnd[3],
+            [
+                6,
+                Position(bnd[2],[2,b,d]),
+                m+1,
+                m+3,
+                m+9,
+                m+13,
+                m+17
+            ]
+        );
+        Add(h_3_bnd,[[a,b,c,d],[l+2,l+4,l+6,l+10,l+11]]);
         # 3-skeleton of intersection
         Add(
             bnd[4],
@@ -763,6 +793,31 @@ ArcDiagramToTubularSurface:=function(arc)
                 l+7,
                 l+8,
                 l+9
+            ]
+        );
+        Add(
+            bnd[4],
+            [
+                8,
+                Position(
+                    List(bnd[3],Set),
+                    Set(
+                        [
+                            4,
+                            Position(bnd[2],[2,a,b]),
+                            Position(bnd[2],[2,c,d]),
+                            Position(bnd[2],[2,a,c]),
+                            Position(bnd[2],[2,b,d])
+                        ]
+                    )
+                ),
+                l,
+                l+1,
+                l+3,
+                l+5,
+                l+7,
+                l+10,
+                l+11
             ]
         );
     end;
@@ -782,13 +837,21 @@ ArcDiagramToTubularSurface:=function(arc)
             Concatenation(ceiling)
         )=[]
     );
-    for i in [1..Length(leftovers)/2] do
+    l:=[];
+    for i in [1..Length(leftovers)] do
+        for j in [i+1..Length(leftovers)] do
+            if bnd[2][leftovers[i]]=bnd[2][leftovers[j]] then
+                Add(l,[leftovers[i],leftovers[j]]);      
+            fi;
+        od;
+    od;
+    for i in [1..Length(l)] do
         pos:=Position( # if leftovers is non-empty
             bnd[3], # add those already existing
             [ # 2-cells (with two 1-cells in their
                 2, # boundaries) of bnd to sub
-                leftovers[2*i-1],
-                leftovers[2*i]
+                l[i][1],
+                l[i][2]
             ]
         );
         Add(sub[3],pos);
@@ -802,8 +865,8 @@ ArcDiagramToTubularSurface:=function(arc)
                 crs[j]=0 then
                     IntersectingCylinders(
                         0_ceiling[i][1],
-                        0_ceiling[i][3],
                         0_ceiling[i][2],
+                        0_ceiling[i][3],
                         0_ceiling[i][4]
                     );
             fi;
@@ -992,12 +1055,317 @@ ArcDiagramToTubularSurface:=function(arc)
             Add(cell,Length(cell),1);
             Add(bnd[3],cell);
             Add(sub[3],Length(bnd[3]));
+            Add(ucap,Length(bnd[3]));
             Add(h_cap[i],Length(bnd[3]));
         fi;
     od;
-
-    # time to repeat a similar process but for the vertical bars--final step
-    return [v_crossings,h_crossings,h_2_bnd,h_3_bnd,h_0_ceiling,h_ceiling,h_cap];
+    # time to repeat a similar process but for the vertical bars
+    HorizontalOrVertical:=function(l)
+        local 0_cells_l;
+        0_cells_l:=Set(
+            Concatenation(
+                List(
+                    l,
+                    x->bnd[2][x]{[2,3]}
+                )
+            )
+        );
+        if true in List(vbars,x->IsSubset(x,0_cells_l)) then
+            return "vertical";
+        elif true in List(hbars,x->IsSubset(x,0_cells_l)) then
+            return "horizontal";
+        else
+            return "neither";
+        fi;
+    end;
+    x:=List(ceiling,x->HorizontalOrVertical(x)="vertical");
+    v_0_ceiling:=0_ceiling*1;
+    v_ceiling:=ceiling*1;
+    v_cap:=cap*1;
+    for i in [1..Length(0_ceiling)] do
+        if x[i]=false then
+            v_0_ceiling[i]:=[];
+            v_ceiling[i]:=[];
+            v_cap[i]:=[];
+        fi;
+    od;
+    for i in [1..Length(0_ceiling)] do
+        for j in [i+1..Length(0_ceiling)] do
+            if Intersection(v_0_ceiling[i],v_0_ceiling[j])<>[] and
+                x[i]=true and
+                    x[j]=true then
+                        Append(
+                            v_0_ceiling[i],
+                            v_0_ceiling[j]
+                        );
+                        v_0_ceiling[j]:=[];
+                        Append(
+                            v_ceiling[i],
+                            v_ceiling[j]
+                        );
+                        v_ceiling[j]:=[];
+                        Append(
+                            v_cap[i],
+                            v_cap[j]
+                        );
+                        v_cap[j]:=[];
+            fi;
+        od;
+    od;
+    Apply(v_0_ceiling,Set);
+    Apply(v_ceiling,Set);
+    Apply(v_cap,Set);
+    for i in [1..Length(v_cap)] do # delete any stray 2-cells that are just crossing pts
+        if Length(v_cap[i])=1 then
+            cell:=bnd[3][v_cap[i][1]]*1;
+            cell:=cell{[2..cell[1]+1]};
+            cell:=Set(Concatenation(List(cell,x->bnd[2][x]{[2,3]})));
+            if true in List(crossings,x->Intersection(cell,x+l0)=cell) then
+                v_0_ceiling[i]:=[];
+                v_ceiling[i]:=[];
+                v_cap[i]:=[];
+            fi;
+        fi;
+    od;
+    # add some degree 2 2-cells to the boundary of our new 3-cells
+    for i in [1..Length(v_ceiling)] do
+        for j in [1..Length(v_ceiling[i])] do
+            pos:=Positions(
+                bnd[2],
+                [
+                    2,
+                    bnd[2][v_ceiling[i][j]][2],
+                    bnd[2][v_ceiling[i][j]][3]
+                ]
+            );
+            if Length(pos)>=2 then
+                pos:=Set(Filtered(pos,x->x<=2*l1));
+                Add(v_cap[i],Position(bnd[3],[2,pos[1],pos[2]]));
+            fi;
+        od;
+    od;
+    for i in [1..Length(v_ceiling)] do # unbind the horizontal 1-cells from the boundary
+        if Intersection(v_ceiling[i],h_crossings)<>[] then # of the vertical 2-cells
+            for j in [1..Length(v_ceiling[i])] do
+                if v_ceiling[i][j] in h_crossings then
+                    Unbind(v_ceiling[i][j]);
+                fi;
+            od;
+            v_ceiling[i]:=Set(v_ceiling[i]);
+        fi;
+    od;
+    # we need to order the 2-cells in each vertical bar so that they can be
+    # separated into entry/exit points for each 0 crossing
+    # this is done by finding the sum of the min and max labeled 0-cells in each 2-cell
+    minmax:=[];
+    for i in [1..Length(v_cap)] do
+        if v_cap[i]<>[] then
+            minmax[i]:=List(
+                v_cap[i],
+                x->Set(
+                    Concatenation(
+                        List(
+                            bnd[3][x]{[2..bnd[3][x][1]+1]},
+                            y->bnd[2][y]{[2,3]}
+                        )
+                    )
+                )
+            );
+            minmax[i]:=List(minmax[i],x->Minimum(x)+Maximum(x));
+            minmax[i]:=List(minmax[i],x->Position(Set(minmax[i]),x));
+            perm:=[];
+            for j in [1..Length(v_cap[i])] do
+                perm[minmax[i][j]]:=v_cap[i][j]*1;
+            od;
+            # minmax[i] is now a permutation which orders the 2-cells
+            # of v_cap[i] vertically from top to bottom
+            v_cap[i]:=perm*1;
+        fi;
+    od;
+    # now to take each vbar in v_cap and separate it into multiple components
+    # if there are any self-intersections involved:
+    # n self intersections => n+1 components
+    crs_2_cells:=Filtered(
+        [l2+1..2*l2],
+        x->Set(
+            Concatenation(
+                List(
+                    bnd[3][x]{[2..bnd[3][x][1]+1]},
+                    y->bnd[2][y]{[2,3]}
+                )
+            )
+        ) in List(crossings,x->Set(x)+l0)
+    );
+    for i in [1..Length(crs_2_cells)] do
+        if not crs[i]=0 then
+            crs_2_cells[i]:=0;
+        fi;
+    od; # list of 2-cells where there's a 0-crossings
+    v_cap_sep:=List([1..Length(v_cap)],x->[]);
+    for i in [1..Length(v_cap)] do
+        if v_cap[i]<>[] and
+            Intersection(v_cap[i],crs_2_cells)<>[] then
+                l:=[];
+                for j in [1..Length(v_cap[i])] do
+                    if not v_cap[i][j] in crs_2_cells then
+                        Add(l,v_cap[i][j]);
+                    else
+                        Add(l,v_cap[i][j]);
+                        Add(v_cap_sep[i],l);
+                        l:=[v_cap[i][j]*1];
+                    fi;
+                od;
+                Add(v_cap_sep[i],l);
+        elif v_cap[i]<>[] then
+            v_cap_sep[i]:=v_cap[i]*1;
+        fi;
+    od;
+    # need to make a list similar to v_cap_sep for the 1-cells in v_ceiling
+    # have to be careful because the boundary of the 2-cells doesn't necessarily
+    # contain all the 1-cells we need (we've added extra corner loops etc.)
+    v_ceiling_sep:=List([1..Length(v_ceiling)]);
+    for i in [1..Length(v_cap)] do
+        if v_cap_sep[i]=[] then
+            v_ceiling_sep[i]:=[];
+        elif v_cap_sep[i][1]*0=0 then
+            v_ceiling_sep[i]:=[];
+        else
+            v_ceiling_sep[i]:=List(
+                [1..Length(v_cap_sep[i])],
+                x->[]
+            );
+        fi;
+    od;
+    for i in [1..Length(v_ceiling_sep)] do
+        if v_ceiling_sep<>[] then
+            if Length(v_ceiling_sep[i])>1 then
+                for j in [1..Length(v_ceiling_sep[i])] do
+                    k:=Set(
+                        Concatenation(
+                            List(
+                                Filtered(v_cap_sep[i][j],x->not x in crs_2_cells),
+                                x->Concatenation(
+                                    List(
+                                        bnd[3][x]{[2..bnd[3][x][1]+1]},
+                                        y->bnd[2][y]{[2,3]}
+                                    )
+                                )
+                            )
+                        )
+                    );
+                    l:=List(
+                        v_ceiling[i],
+                        x->bnd[2][x]{[2,3]}  
+                    );
+                    for m in [1..Length(l)] do
+                        if Length(Intersection(k,l[m]))=2 then
+                            Add(v_ceiling_sep[i][j],v_ceiling[i][m]*1);
+                        fi;
+                    od;
+                od;
+            else
+                v_ceiling_sep[i]:=v_ceiling[i]*1;
+            fi;
+        fi;
+    od;
+    # v_ceiling_sep contains enough information to obtain the boundary of our capping
+    # vertical 2-cells. once those are added to bnd, add their indexing to v_cap_sep's
+    # 3-cells. the 3-cells can then be formed by comparing intersections (at corners only)
+    # with the horizontal 3-cells in h_cap
+    for i in [1..Length(v_cap_sep)] do
+        if v_cap_sep[i]<>[] then
+            if IsList(v_cap_sep[i][1]) then
+                x:=0; # binary counter for entry/exit
+                for j in [1..Length(v_cap_sep[i])] do
+                    if Intersection(v_cap_sep[i][j],crs_2_cells)<>[] then
+                        int:=List(crossings+l0)[
+                            Position(
+                                crs_2_cells,
+                                Intersection(
+                                    v_cap_sep[i][j],
+                                    crs_2_cells
+                                )[1]
+                            )
+                        ];
+                        for k in [1..Length(v_2_bnd)] do
+                            if Set(int)=Set(v_2_bnd[k][1]) then
+                                Append(v_ceiling_sep[i][j],v_2_bnd[k][2][x+1]);
+                                cell:=v_ceiling_sep[i][j]*1;
+                                Add(cell,Length(cell),1);
+                                Add(bnd[3],cell);
+                                Add(sub[3],Length(bnd[3]));
+                                Add(v_cap_sep[i][j],Length(bnd[3]));
+                                Add(ucap,Length(bnd[3]));
+                                Append(v_cap_sep[i][j],v_3_bnd[k][2][x+1]);
+                                Unbind(
+                                    v_cap_sep[i][j][
+                                        Position(
+                                            v_cap_sep[i][j],
+                                            Intersection(
+                                                v_cap_sep[i][j],
+                                                crs_2_cells
+                                            )[1]
+                                        )
+                                    ]
+                                );
+                                v_cap_sep[i][j]:=Set(v_cap_sep[i][j]);
+                                x:=x+1 mod 2;
+                            fi;
+                        od;
+                    fi;
+                od;
+            fi;
+        fi;
+    od;
+    # final step, matching the boundaries of 3-cells in h_cap with those in v_cap_sep
+    3cells:=[];
+    for i in [1..Length(h_cap)] do
+        if h_cap[i]<>[] then
+            Add(3cells,Filtered(h_cap[i],x->not x in crs_2_cells));
+        fi;
+    od;
+    for i in [1..Length(v_cap_sep)] do
+        if v_cap_sep[i]<>[] then
+            if IsList(v_cap_sep[i][1]) then
+                for j in [1..Length(v_cap_sep[i])] do
+                    Add(3cells,v_cap_sep[i][j]);
+                od;
+            else
+                Add(3cells,v_cap_sep[i]);
+            fi;
+        fi;
+    od;
+    for i in [1..Length(3cells)] do
+        for j in [i+1..Length(3cells)] do
+            if IsBound(3cells[i]) and IsBound(3cells[j]) then
+                int1:=List(3cells[i],x->bnd[3][x]{[2..bnd[3][x][1]+1]});
+                int2:=List(3cells[j],x->bnd[3][x]{[2..bnd[3][x][1]+1]});
+                int1:=Concatenation(List(int1,x->List(x,y->bnd[2][y]{[2,3]})));
+                int2:=Concatenation(List(int2,x->List(x,y->bnd[2][y]{[2,3]})));
+                int1:=Filtered(int1,x->x[1]<=2*l0 and x[2]<=2*l0);
+                int2:=Filtered(int2,x->x[1]<=2*l0 and x[2]<=2*l0);
+                int1:=Filtered(int1,x->Length(Positions(bnd[2],[2,x[1],x[2]]))=3);
+                int2:=Filtered(int2,x->Length(Positions(bnd[2],[2,x[1],x[2]]))=3);
+                int1:=Set(int1); int2:=Set(int2);
+                if Intersection(int1,int2)<>[] then
+                    Append(3cells[i],3cells[j]);
+                    Unbind(3cells[j]);
+                fi;
+            fi;
+        od;
+    od;
+    3cells:=Set(3cells,Set);
+    for i in [1..Length(3cells)] do
+        for j in List(3cells[i],x->List(bnd[3][x]{[2..Length(bnd[3][x])]},y->bnd[2][y]{[2,3]})) do
+        Print(j,"\n");
+        od;
+        Print("--------","\n");
+    od;
+    #return 3cells;
+    for i in [1..Length(3cells)] do
+        Add(3cells[i],Length(3cells[i]),1);
+        Add(bnd[4],3cells[i]*1);
+    od;
 ###################################################################################
 
 # add a cap to both ends of D x [0,1] 
@@ -1030,12 +1398,10 @@ ArcDiagramToTubularSurface:=function(arc)
 
 # add colour
 ####################################################################################
-    for i in [1..4] do
-        for j in [1..Length(bnd[i])] do
-            if not IsBound(colour[i][j]) then
-                colour[i][j]:=[0];
-            fi;
-        od;
+    for i in [1..Length(bnd[3])] do
+        if not IsBound(colour[3][i]) then
+            colour[3][i]:=[0];
+        fi;
     od;
     colour_:={n,k}->colour[n+1][k];
 ####################################################################################
@@ -1043,23 +1409,40 @@ ArcDiagramToTubularSurface:=function(arc)
     x!.colour:=colour_;
     return x;
 end;
-
-b:=
-[ [ [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], 
-      [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], [ 1, 0 ], 
-      [ 1, 0 ], [ 1, 0 ], [1,0],[1,0],[1,0],[1,0] ], 
-  [ [ 2, 1, 2 ], [ 2, 1, 2 ], [ 2, 1, 3 ], [ 2, 2, 4 ], [ 2, 3, 4 ], 
-      [ 2, 3, 5 ], [ 2, 4, 6 ], [ 2, 5, 6 ], [ 2, 5, 7 ], [ 2, 6, 8 ], 
-      [ 2, 7, 8 ], [ 2, 7, 8 ], [ 2, 9, 10 ], [ 2, 9, 10 ], [ 2, 11, 12 ], 
-      [ 2, 11, 12 ], [ 2, 9, 11 ], [ 2, 10, 12 ], [ 2, 13, 14 ], 
-      [ 2, 13, 14 ], [ 2, 11, 13 ], [ 2, 12, 14 ], [ 2, 15, 16 ], 
-      [ 2, 15, 16 ], [ 2, 13, 15 ], [ 2, 14, 16 ], [ 2, 3, 9 ], [ 2, 4, 15 ], 
-      [ 2, 5, 10 ], [ 2, 6, 16 ], [2,17,18],[2,17,18],[2,3,17],[2,5,18],[2,19,20],[2,19,20],[2,4,19],[2,6,20] ], 
-  [ [ 4, 2, 3, 4, 5 ], [ 4, 5, 6, 7, 8 ], [ 4, 8, 9, 10, 11 ], 
-      [ 4, 13, 17, 18, 15 ], [ 4, 14, 17, 18, 16 ], [ 4, 15, 21, 22, 19 ], 
-      [ 4, 16, 21, 22, 20 ], [ 4, 19, 25, 26, 23 ], [ 4, 20, 25, 26, 24 ], 
-      [ 2, 13, 14 ], [ 2, 23, 24 ], [ 6, 27, 28, 5, 17, 21, 25 ], 
-      [ 6, 29, 30, 8, 18, 22, 26 ], [ 4, 7, 28, 30, 24 ], 
-      [ 4, 6, 27, 29, 14 ], [ 2, 1, 2 ], [ 2, 11, 12 ], 
-      [ 12, 1, 4, 28, 23, 30, 10, 12, 9, 29, 13, 27, 3 ], [2,31,32],[4,32,33,34,6],[2,35,36],[4,36,37,38,7],[6,31,33,34,27,29,13],[6,35,37,38,28,30,23] ], 
-  [ [ 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18 ],[4,19,20,23,10],[4,21,22,24,11] ], [  ] ];
+test:=[
+    List([1..20],x->[1,0]),
+    [
+        [2,1,2],[2,1,2],[2,1,3],[2,2,4],[2,3,4],[2,3,5],[2,4,6],[2,5,6],[2,5,7],
+        [2,6,8],[2,7,8],[2,7,8],[2,9,10],[2,9,10],[2,3,9],[2,5,10],[2,4,11],[2,6,12],
+        [2,11,12],[2,11,12],[2,3,13],[2,5,14],[2,13,14],[2,13,14],[2,13,15],[2,14,16],[2,15,16],
+        [2,15,16],[2,15,17],[2,16,18],[2,17,18],[2,17,18],[2,17,19],[2,18,20],[2,19,20],
+        [2,19,20],[2,4,19],[2,6,20]
+    ],
+    [
+        [2,1,2],[4,2,3,4,5],[4,5,6,7,8],[4,8,9,10,11],[2,11,12],[2,13,14],[4,6,14,15,16],
+        [4,7,17,18,19],[2,19,20],[4,7,36,37,38],[4,6,21,22,23],[2,23,24],[2,35,36],
+        [4,23,25,26,27],[4,24,25,26,28],[4,27,29,30,31],[4,28,29,30,32],[4,31,33,34,35],
+        [4,32,33,34,36],[12,1,3,21,23,22,9,12,10,38,35,37,4],[6,13,15,16,21,22,23],
+        [6,20,17,18,37,35,38],[6,5,21,25,29,33,37],[6,8,22,26,30,34,38]
+    ],
+    [
+        [10,1,2,4,5,14,16,18,20,23,24],[8,12,14,15,16,17,18,19,13],[5,21,6,7,11,12],
+        [5,22,8,9,10,13],[8,15,17,19,10,11,3,23,24]
+    ],
+    []
+];
+test2:=[
+    List([1..10],x->[1,0]),
+    [
+        [2,1,2],[2,1,2],[2,3,4],[2,3,4],[2,1,3],[2,2,4],[2,1,5],[2,2,6],[2,5,6],
+        [2,3,7],[2,4,8],[2,7,8],[2,5,7],[2,6,8],[2,5,9],[2,7,9],[2,6,10],[2,8,10]
+    ],
+    [
+        [2,1,2],[2,3,4],[4,1,3,5,6],[4,2,4,5,6],[4,2,7,8,9],[4,4,10,11,12],[4,9,12,13,14],
+        [3,13,15,16],[3,14,17,18],[10,1,3,7,8,10,11,15,16,17,18]
+    ],
+    [
+        [4,1,2,3,4],[8,3,4,5,6,7,8,9,10]
+    ],
+    []
+];
