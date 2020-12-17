@@ -744,6 +744,7 @@ ArcDiagramToTubularSurface:=function(arc)
                 m+15
             ]
         );
+        Add(sub[3],Length(bnd[3]));
         # these 2-cells are those which should be coloured #########################
         if IsBound(clr) then                                                      ##
             pos:=Position(List(crossings,x->Set(x)+l0),Set([a,b,c,d]));           ##
@@ -782,9 +783,11 @@ ArcDiagramToTubularSurface:=function(arc)
             fi;                                                                   ##
         fi;                                                                       ##
         ############################################################################
-        # from this point onwards, cells added are only present in bnd, not sub
         Add(bnd[3],[2,m+4,m+5]); # l+8
+        Add(sub[3],Length(bnd[3]));
         Add(bnd[3],[2,m+14,m+15]); # l+9
+        Add(sub[3],Length(bnd[3]));
+        # from this point onwards, cells added are only present in bnd, not sub
         Add(v_3_bnd,[[a,b,c,d],[[l,l+8],[l+1,l+9]]]);
         Add( # l+10
             bnd[3],
