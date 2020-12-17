@@ -17,7 +17,7 @@ ArcDiagramToTubularSurface:=function(arc)
         h_cap, h_2_bnd, h_3_bnd, nr_crs, v_crossings,
         h_crossings, v_0_ceiling, v_ceiling, v_cap,
         minmax, v_2_bnd, v_3_bnd, perm, crs_2_cells,
-        v_cap_sep, v_ceiling_sep, 3cells, int1, int2;
+        v_cap_sep, v_ceiling_sep, 3cells, int1, int2, m;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -503,17 +503,22 @@ ArcDiagramToTubularSurface:=function(arc)
             Concatenation(floor)
         )=[]
     );
-    for i in [1..Length(leftovers)/2] do
-        pos:=Position( # if leftovers is non-empty
-            bnd[3], # add those already existing
-            [ # 2-cells (with two 1-cells in their
-                2, # boundaries) of bnd to sub
-                leftovers[2*i-1],
-                leftovers[2*i]
-            ]
-        );
-        Add(sub[3],pos);
-        Add(lcap,pos);
+    for i in [1..Length(leftovers)-1] do
+        for j in [i+1..Length(leftovers)] do
+            pos:=Position( # if leftovers is non-empty
+                bnd[3], # add those already existing
+                [ # 2-cells (with two 1-cells in their
+                    2, # boundaries) of bnd to sub
+                    leftovers[i],
+                    leftovers[j]
+                ]
+            );
+            if pos<>fail then
+                Add(sub[3],pos);
+                Add(lcap,pos);
+                break;
+            fi;
+        od;
     od;
     for i in [1..Length(floor)] do # floor is now a list whose length is how many
         for j in [i+1..Length(floor)] do # 2-cells we have to add to both sub & bnd
@@ -740,8 +745,11 @@ ArcDiagramToTubularSurface:=function(arc)
             ]
         );
         # these 2-cells are those which should be coloured #########################
+        if IsBound(clr) then                                                      ##
+            pos:=Position(List(crossings,x->Set(x)+l0),Set([a,b,c,d]));           ##
+        fi;                                                                       ##
         Add(bnd[3],[4,m+4,m+6,m+8,m+9]); # l+2                                    ##
-        Add(sub[3],Length(bnd[3]));                                               ##   
+        Add(sub[3],Length(bnd[3]));                                               ##              
         Add(bnd[3],[4,m+5,m+7,m+8,m+9]); # l+3                                    ##
         Add(sub[3],Length(bnd[3]));                                               ## 
         for i in [0,1] do                                                         ##
@@ -750,6 +758,29 @@ ArcDiagramToTubularSurface:=function(arc)
             Add(bnd[3],[4,m+7+4*i,m+11+4*i,m+12+4*i,m+13+4*i]); # l+5, l+7        ##
             Add(sub[3],Length(bnd[3]));                                           ##
         od;                                                                       ##
+        if IsBound(clr) then                                                      ##
+            if clr[pos]=1 then                                                    ##
+                colour[3][Length(bnd[3])-5]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])-4]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])-1]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])]:=[-1]; # blue                           ##
+            elif clr[pos]=2 then                                                  ##
+                colour[3][Length(bnd[3])-5]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])-4]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])-1]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])]:=[1]; # red                             ##
+            elif clr[pos]=3 then                                                  ##
+                colour[3][Length(bnd[3])-5]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])-4]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])-1]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])]:=[-1]; # blue                           ##
+            else                                                                  ##
+                colour[3][Length(bnd[3])-5]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])-4]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])-1]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])]:=[1]; # red                             ##
+            fi;                                                                   ##
+        fi;                                                                       ##
         ############################################################################
         # from this point onwards, cells added are only present in bnd, not sub
         Add(bnd[3],[2,m+4,m+5]); # l+8
@@ -1082,6 +1113,8 @@ ArcDiagramToTubularSurface:=function(arc)
     v_0_ceiling:=0_ceiling*1;
     v_ceiling:=ceiling*1;
     v_cap:=cap*1;
+    #return List(v_cap,x->List(bnd[3][x[1]]{[2..bnd[3][x[1]][1]+1]},y->bnd[2][y]{[2,3]}));
+    #something's messing up here
     for i in [1..Length(0_ceiling)] do
         if x[i]=false then
             v_0_ceiling[i]:=[];
@@ -1274,7 +1307,7 @@ ArcDiagramToTubularSurface:=function(arc)
     # with the horizontal 3-cells in h_cap
     for i in [1..Length(v_cap_sep)] do
         if v_cap_sep[i]<>[] then
-            if IsList(v_cap_sep[i][1]) then
+            if IsList(v_cap_sep[i][1]) then # you forgot the else statement here...
                 x:=0; # binary counter for entry/exit
                 for j in [1..Length(v_cap_sep[i])] do
                     if Intersection(v_cap_sep[i][j],crs_2_cells)<>[] then
@@ -1309,14 +1342,22 @@ ArcDiagramToTubularSurface:=function(arc)
                                     ]
                                 );
                                 v_cap_sep[i][j]:=Set(v_cap_sep[i][j]);
-                                x:=x+1 mod 2;
+                                x:=(x+1) mod 2;
                             fi;
                         od;
                     fi;
                 od;
+            else
+                cell:=Set(v_ceiling_sep[i])*1;
+                Add(cell,Length(cell),1);
+                Add(bnd[3],cell);
+                Add(sub[3],Length(bnd[3]));
+                Add(v_cap_sep[i],Length(bnd[3]));
+                Add(ucap,Length(bnd[3]));
             fi;
         fi;
     od;
+
     # final step, matching the boundaries of 3-cells in h_cap with those in v_cap_sep
     3cells:=[];
     for i in [1..Length(h_cap)] do
@@ -1355,13 +1396,6 @@ ArcDiagramToTubularSurface:=function(arc)
         od;
     od;
     3cells:=Set(3cells,Set);
-    for i in [1..Length(3cells)] do
-        for j in List(3cells[i],x->List(bnd[3][x]{[2..Length(bnd[3][x])]},y->bnd[2][y]{[2,3]})) do
-        Print(j,"\n");
-        od;
-        Print("--------","\n");
-    od;
-    #return 3cells;
     for i in [1..Length(3cells)] do
         Add(3cells[i],Length(3cells[i]),1);
         Add(bnd[4],3cells[i]*1);
@@ -1409,40 +1443,22 @@ ArcDiagramToTubularSurface:=function(arc)
     x!.colour:=colour_;
     return x;
 end;
-test:=[
-    List([1..20],x->[1,0]),
-    [
-        [2,1,2],[2,1,2],[2,1,3],[2,2,4],[2,3,4],[2,3,5],[2,4,6],[2,5,6],[2,5,7],
-        [2,6,8],[2,7,8],[2,7,8],[2,9,10],[2,9,10],[2,3,9],[2,5,10],[2,4,11],[2,6,12],
-        [2,11,12],[2,11,12],[2,3,13],[2,5,14],[2,13,14],[2,13,14],[2,13,15],[2,14,16],[2,15,16],
-        [2,15,16],[2,15,17],[2,16,18],[2,17,18],[2,17,18],[2,17,19],[2,18,20],[2,19,20],
-        [2,19,20],[2,4,19],[2,6,20]
-    ],
-    [
-        [2,1,2],[4,2,3,4,5],[4,5,6,7,8],[4,8,9,10,11],[2,11,12],[2,13,14],[4,6,14,15,16],
-        [4,7,17,18,19],[2,19,20],[4,7,36,37,38],[4,6,21,22,23],[2,23,24],[2,35,36],
-        [4,23,25,26,27],[4,24,25,26,28],[4,27,29,30,31],[4,28,29,30,32],[4,31,33,34,35],
-        [4,32,33,34,36],[12,1,3,21,23,22,9,12,10,38,35,37,4],[6,13,15,16,21,22,23],
-        [6,20,17,18,37,35,38],[6,5,21,25,29,33,37],[6,8,22,26,30,34,38]
-    ],
-    [
-        [10,1,2,4,5,14,16,18,20,23,24],[8,12,14,15,16,17,18,19,13],[5,21,6,7,11,12],
-        [5,22,8,9,10,13],[8,15,17,19,10,11,3,23,24]
-    ],
-    []
-];
-test2:=[
-    List([1..10],x->[1,0]),
-    [
-        [2,1,2],[2,1,2],[2,3,4],[2,3,4],[2,1,3],[2,2,4],[2,1,5],[2,2,6],[2,5,6],
-        [2,3,7],[2,4,8],[2,7,8],[2,5,7],[2,6,8],[2,5,9],[2,7,9],[2,6,10],[2,8,10]
-    ],
-    [
-        [2,1,2],[2,3,4],[4,1,3,5,6],[4,2,4,5,6],[4,2,7,8,9],[4,4,10,11,12],[4,9,12,13,14],
-        [3,13,15,16],[3,14,17,18],[10,1,3,7,8,10,11,15,16,17,18]
-    ],
-    [
-        [4,1,2,3,4],[8,3,4,5,6,7,8,9,10]
-    ],
-    []
-];
+#gap> b:=HopfSatohSurface();
+#Pure cubical complex of dimension 4.
+#
+#gap> b:=RegularCWComplex(b);
+#Regular CW-complex of dimension 4
+#
+#gap> b:=SimplifiedComplex(b);
+#Regular CW-complex of dimension 4
+#
+#gap> Homology(b,0);
+#[ 0, 0 ]
+#gap> Homology(b,1);
+#[ 0, 0, 0, 0 ]
+#gap> Homology(b,2);
+#[ 0, 0 ]
+#gap> Homology(b,3);
+#[  ]
+#gap> Homology(b,4);
+#[  ]
