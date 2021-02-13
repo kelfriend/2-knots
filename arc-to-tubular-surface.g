@@ -8,12 +8,12 @@ ArcDiagramToTubularSurface:=function(arc)
         path, unselectedEdges, sourceORtarget,
         faceloops, x, ClockwiseTurn, 2cell, sORt,
         ori, e1, e0, loops, present_loops, vertices,
-        check, l0, l1, l2, l0_, l1_, l2_, IsEdgeInDuplicate,
+        check, l0, l1, l2, l1_, l2_, IsEdgeInDuplicate,
         copy1, hbars2, vbars2, copy2, 3cell, colour, lcap,
         ucap, floor, ceiling, cap, cap_, loop, colour_,
         leftovers, pos, HorizontalOrVertical, l, y,
-        SubcapTo3cell, IntersectingCylinders, l0__, l1__,
-        l2__, 0_ceiling, crs_int, h_0_ceiling, h_ceiling,
+        SubcapTo3cell, AboveBelow0Cell, l1__, l2__, IntersectingCylinders,
+        path_comp, 0_ceiling, h_0_ceiling, h_ceiling,
         h_cap, h_2_bnd, h_3_bnd, nr_crs, v_crossings,
         h_crossings, v_0_ceiling, v_ceiling, v_cap,
         minmax, v_2_bnd, v_3_bnd, perm, crs_2_cells,
@@ -33,7 +33,7 @@ ArcDiagramToTubularSurface:=function(arc)
         prs:=arc*1;
     fi;
 
-# the 0-skeleton of the disk
+# (i) the 0-skeleton of the disk
 ####################################################################################
     grd:=List([1..Length(prs)],x->[1..Length(prs)]*0);
     for i in [0..Length(prs)-1] do
@@ -125,7 +125,7 @@ ArcDiagramToTubularSurface:=function(arc)
     fi;
 ####################################################################################
 
-# the 1-skeleton of the disk
+# (ii) the 1-skeleton of the disk
 ####################################################################################
     # add the horizontal 1-cells
     hbars:=[];
@@ -199,7 +199,7 @@ ArcDiagramToTubularSurface:=function(arc)
         loops2:=Filtered(GRD[i+3],x->x<>0);
         for j in [1,2] do
             Add(bnd[2],[2,loops1[1],loops2[1]]);
-            Add(sub[2],Length(bnd[2])); # loops always in subcomplex
+            Add(sub[2],Length(bnd[2])); # loops always in subcomplex... for now
             Add(bnd[2],[2,loops1[Length(loops1)],loops2[Length(loops2)]]);
             Add(sub[2],Length(bnd[2]));
         od;
@@ -210,7 +210,7 @@ ArcDiagramToTubularSurface:=function(arc)
     Add(bnd[2],[2,1,nr0cells]); Add(bnd[2],[2,1,nr0cells]);
 ####################################################################################
 
-# the 2-skeleton of the disk
+# (iii) the 2-skeleton of the disk
 ####################################################################################
     unchosen:=List(bnd[2],x->x{[2,3]});
     neighbours:=List(bnd[1],x->[]);
@@ -350,10 +350,10 @@ ArcDiagramToTubularSurface:=function(arc)
     bnd[3]:=List(bnd[3],x->Concatenation([x[1]],Set(x{[2..Length(x)]})));
 ####################################################################################
 
-# the direct product of the disk with [0,1]
+# (iv) the direct product of the disk with [0,1]
 ####################################################################################
 # make a duplicate of the disk
-    l0:=Length(bnd[1]); l0_:=Length(sub[1]);
+    l0:=Length(bnd[1]);
     l1:=Length(bnd[2]); l1_:=Length(sub[2]);
     l2:=Length(bnd[3]); l2_:=Length(sub[3]);
 
@@ -388,7 +388,7 @@ ArcDiagramToTubularSurface:=function(arc)
     loops:=Set(Concatenation(List(loops,x->x{[2,3]})));
     bnd[1]:=Concatenation(bnd[1],bnd[1]);
     sub[1]:=Concatenation(sub[1],[l0+2..2*l0-1]); 
-# sub contains all duplicate 0-cells except for those in the frame
+# sub contains all duplicate 0-cells except for those in the frame... for now
 
     copy1:=List(bnd[2],x->x+[0,l0,l0]);
     bnd[2]:=Concatenation(bnd[2],copy1);
@@ -420,15 +420,29 @@ ArcDiagramToTubularSurface:=function(arc)
                     Add(sub[3],i);
         fi;
     od;
-    l0__:=Length(bnd[1]); l1__:=Length(sub[2]); l2__:=Length(sub[3]);
+    l1__:=Length(sub[2]); l2__:=Length(sub[3]);
+
+# 13-02-21 remove any path components of sub that consist of two 0-cells and two 1-cells only
+    path_comp:=PathComponentsCWSubcomplex([RegularCWComplex(bnd),sub]);
+    for i in [1..Length(path_comp)] do
+        if Length(path_comp[i][2][1])=2 and
+            Length(path_comp[i][2][2])=2 then
+                for j in [1,2] do
+                    sub[j]:=Difference(sub[j],path_comp[i][2][j]);
+                od;
+        fi;
+    od;
 
 # join the original disk to the copy
 # each n-cell of the disk yields an (n+1)-cell which connects it
 # to its duplicate
     for i in [1..l0] do
         Add(bnd[2],[2,i,i+l0]);
-        if (i in loops) and (not i in [1,l0]) then
-            Add(sub[2],Length(bnd[2]));
+        if i in loops and
+            i in sub[1] and
+                i+l0 in sub[1] and
+                    not i in [1,l0] then
+                        Add(sub[2],Length(bnd[2]));
         fi;
     od;
 
@@ -444,13 +458,25 @@ ArcDiagramToTubularSurface:=function(arc)
             ]
         );
         if i in sub[2] and
-            Length(Positions(bnd[2],bnd[2][i]))=2 then
+            Length(Positions(bnd[2],bnd[2][i]))=2 and
+                i+l1 in sub[2] then
                 Add(sub[3],Length(bnd[3]));
         fi;       
     od;
 
     for i in [1..l2] do
         3cell:=[];
+        # 13-02-21 plug the corner holes
+            if bnd[3][i][1]=2 and
+                bnd[3][i][2] in sub[2] and
+                    not bnd[3][i][2]+l1 in sub[2] then
+                        Add(sub[3],i);
+            fi;
+            if bnd[3][i][1]=2 and
+                not bnd[3][i][2] in sub[2] and
+                    bnd[3][i][2]+l1 in sub[2] then
+                        Add(sub[3],i+l2);
+            fi;
         for j in bnd[3][i]{[2..Length(bnd[3][i])]} do
             Add(
                 3cell,
@@ -476,7 +502,7 @@ ArcDiagramToTubularSurface:=function(arc)
     od;
 ####################################################################################
 
-# join the loops according to crs
+# (v) join the open ended 'tubes' at either end of B^2xI according to crs
 ####################################################################################
     colour:=List([1..4],x->[]);
 
@@ -484,7 +510,7 @@ ArcDiagramToTubularSurface:=function(arc)
         crs:=List([1..Length(crossings)],x->1);
     fi;
     
-# start with the lower caps, they're more straight forward
+# (a) start with the lower caps, they're more straight forward #####################
     lcap:=Filtered([1..l2],y->not y in sub[3] and bnd[3][y][1]<>2); # lower 'dome'
     cap:=[]; # 3-cells inside caps for each horizontal/vertical tube in lower dome
     floor:=[];
@@ -684,11 +710,41 @@ ArcDiagramToTubularSurface:=function(arc)
         Add(bnd[4],cell);
     od;
 
-# now for the upper caps, 0 in crs leads to a very elaborate CW-structure
+# 13-02-21 this function was added to help alter the intersection structure below
+# after discovering it was incorrect
+    AboveBelow0Cell:=function(n,str)
+        local n_, i, j, l;
+
+        if n>l0 then
+            n_:=n-l0;
+        else
+            n_:=n*1;
+        fi;
+
+        i:=Position(List(GRD,x->n_ in x),true);
+        j:=Position(GRD[i],n_);
+        
+        if str="above" then
+            l:=Reversed([1..i-1]);
+        else
+            l:=[i+1..Length(GRD)];
+        fi;
+
+        for k in l do
+            if GRD[k][j]<>0 then
+                if n>l0 then
+                    return GRD[k][j]+l0;
+                else
+                    return GRD[k][j];
+                fi;
+            fi;
+        od;
+    end;
+
+# (b) now for the upper caps, 0 in crs leads to a very elaborate CW-structure #######
     ucap:=Filtered([l2+1..2*l2],y->not y in sub[3] and bnd[3][y][1]<>2);
     cap:=[];
     ceiling:=[];
-    crs_int:=[];
     h_2_bnd:=[];
     h_3_bnd:=[];
     v_2_bnd:=[];
@@ -893,19 +949,6 @@ ArcDiagramToTubularSurface:=function(arc)
     od;
     0_ceiling:=List(ceiling,x->List(x,y->bnd[2][y]{[2,3]}));
     0_ceiling:=List(0_ceiling,x->Set(Concatenation(x)));
-    for i in [1..Length(0_ceiling)] do # for each self-intersection, add
-        for j in [1..Length(crossings)] do # the additional structure
-            if Length(Intersection(0_ceiling[i],crossings[j]+l0))=4 and
-                crs[j]=0 then
-                    IntersectingCylinders(
-                        0_ceiling[i][1],
-                        0_ceiling[i][2],
-                        0_ceiling[i][3],
-                        0_ceiling[i][4]
-                    );
-            fi;
-        od;
-    od;
     for i in [1..Length(0_ceiling)] do
         for j in [i+1..Length(0_ceiling)] do
             int:=Intersection(0_ceiling[i],0_ceiling[j]);
@@ -930,6 +973,19 @@ ArcDiagramToTubularSurface:=function(arc)
                         )
                     ]:=Length(bnd[2]);
                 fi;
+            fi;
+        od;
+    od;
+    for i in [1..Length(0_ceiling)] do # for each self-intersection, add
+        for j in [1..Length(crossings)] do # the additional structure
+            if Length(Intersection(0_ceiling[i],crossings[j]+l0))=4 and
+                crs[j]=0 then
+                    IntersectingCylinders(
+                        0_ceiling[i][1],
+                        0_ceiling[i][2],
+                        0_ceiling[i][3],
+                        0_ceiling[i][4]
+                    );
             fi;
         od;
     od;
@@ -1446,22 +1502,3 @@ ArcDiagramToTubularSurface:=function(arc)
     x!.colour:=colour_;
     return x;
 end;
-#gap> b:=HopfSatohSurface();
-#Pure cubical complex of dimension 4.
-#
-#gap> b:=RegularCWComplex(b);
-#Regular CW-complex of dimension 4
-#
-#gap> b:=SimplifiedComplex(b);
-#Regular CW-complex of dimension 4
-#
-#gap> Homology(b,0);
-#[ 0, 0 ]
-#gap> Homology(b,1);
-#[ 0, 0, 0, 0 ]
-#gap> Homology(b,2);
-#[ 0, 0 ]
-#gap> Homology(b,3);
-#[  ]
-#gap> Homology(b,4);
-#[  ]
