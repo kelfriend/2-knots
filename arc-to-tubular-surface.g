@@ -9,10 +9,9 @@ ArcDiagramToTubularSurface:=function(arc)
         faceloops, x, ClockwiseTurn, 2cell, sORt,
         ori, e1, e0, loops, present_loops, vertices,
         check, l0, l1, l2, l1_, l2_, IsEdgeInDuplicate,
-        copy1, hbars2, vbars2, copy2, 3cell, colour, lcap,
-        ucap, l1__, l2__, path_comp, lcap_add, ucap_add,
-        pipes, HorizontalOrVertical, l, AboveBelow0Cell,
-        IntersectingCylinders, pos, colour_;
+        copy1, hbars2, vbars2, copy2, 3cell, colour, lcap, reg,
+        closure, ucap, l1__, l2__, path_comp, pipes, HorizontalOrVertical,
+        l, AboveBelow0Cell, IntersectingCylinders, pos, colour_;
 
     if IsList(arc[1][1]) then
         prs:=arc[1]*1;
@@ -459,8 +458,6 @@ ArcDiagramToTubularSurface:=function(arc)
         fi;       
     od;
 
-    lcap_add:=[];
-    ucap_add:=[];
     for i in [1..l2] do
         3cell:=[];
         # 13-02-21 plug the corner holes
@@ -468,13 +465,11 @@ ArcDiagramToTubularSurface:=function(arc)
                 bnd[3][i][2] in sub[2] and
                     not bnd[3][i][2]+l1 in sub[2] then
                         Add(sub[3],i);
-                        Add(lcap_add,i);
             fi;
             if bnd[3][i][1]=2 and
                 not bnd[3][i][2] in sub[2] and
                     bnd[3][i][2]+l1 in sub[2] then
                         Add(sub[3],i+l2);
-                        Add(ucap_add,i+l2);
             fi;
         for j in bnd[3][i]{[2..Length(bnd[3][i])]} do
             Add(
@@ -510,10 +505,18 @@ ArcDiagramToTubularSurface:=function(arc)
     fi;
 
 # (a) start with the lower caps, they're more straight forward #####################
-    lcap:=Filtered([1..l2],y->not y in sub[3] and bnd[3][y][1]<>2); # lower dome 2-cells
-    # 14-02-21 need to alter lcap to include those 2-cells with 2 1-cells in their
-    # boundaries which were removed from sub above
-    Append(lcap,lcap_add);
+    lcap:=[];
+    reg:=RegularCWComplex(bnd);
+    for i in [1..l2] do
+        if bnd[3][i][1]<>2 and not i in sub[3] then
+            Add(lcap,i);
+        elif bnd[3][i][1]=2 and not i in sub[3] then
+            closure:=ClosureCWCell(reg,2,i);
+            if not IsSubset(sub[2],closure[2][2]) then
+                Add(lcap,i);
+            fi;
+        fi;
+    od;
 
     pipes:=[]; # the 0,1 and 2-cells of each 'pipe' in the lower dome which will join
     # together to form the (intersecting) tubular surface
@@ -679,9 +682,18 @@ ArcDiagramToTubularSurface:=function(arc)
         od;
     end;
     
-    ucap:=Filtered([l2+1..2*l2],y->not y in sub[3] and bnd[3][y][1]<>2); # upper dome 2-cells
-    # 14-02-21 again, adding the removed 2-cells to ucap
-    Append(ucap,ucap_add);
+    ucap:=[];
+    reg:=RegularCWComplex(bnd);
+    for i in [l2+1..2*l2] do
+        if bnd[3][i][1]<>2 and not i in sub[3] then
+            Add(ucap,i);
+        elif bnd[3][i][1]=2 and not i in sub[3] then
+            closure:=ClosureCWCell(reg,2,i);
+            if not IsSubset(sub[2],closure[2][2]) then
+                Add(ucap,i);
+            fi;
+        fi;
+    od;
 
     pipes:=[]; # the 0,1 and 2-cells of each 'pipe' in the upper dome which will join
     # together to form the (intersecting) tubular surface
@@ -711,7 +723,8 @@ ArcDiagramToTubularSurface:=function(arc)
             n, i, m, j, l, a_abv,
             b_abv, c_blw, d_blw,
             del_2_cell_1, del_2_cell_2,
-            del_2_cell_1_i, del_2_cell_2_i, dif;
+            del_2_cell_1_i, del_2_cell_2_i,
+            dif, f_clr, f_clr1, f_clr2;
 # attaches to a 0 crossing some additional regular CW-structure
 # to allow for a self-intersection to occur
         n:=1*Length(bnd[1])+1;
@@ -778,6 +791,15 @@ ArcDiagramToTubularSurface:=function(arc)
             true
         );
         sub[3]:=Difference(sub[3],[del_2_cell_1_i,del_2_cell_2_i]);
+        sub[2]:=Difference(
+            sub[2],
+            [
+                Position(bnd[2],[2,a_abv,a]),
+                Position(bnd[2],[2,b_abv,b]),
+                Position(bnd[2],[2,c,c_blw]),
+                Position(bnd[2],[2,d,d_blw])
+            ]
+        );
 
         # 14-02-21 this new structure has 4 additional 1-cells
         Add(bnd[2],[2,a_abv,n]); Add(sub[2],Length(bnd[2])); # m+18
@@ -812,6 +834,7 @@ ArcDiagramToTubularSurface:=function(arc)
         # these 2-cells are those which should be coloured #########################
         if IsBound(clr) then                                                      ##
             pos:=Position(List(crossings,x->Set(x)+l0),Set([a,b,c,d]));           ##
+            pos:=pos-Length(Filtered(crs{[1..pos-1]},x->x<>0));                   ##
         fi;                                                                       ##
         Add(bnd[3],[4,m+4,m+6,m+8,m+9]); # l+2                                    ##
         Add(sub[3],Length(bnd[3]));                                               ##              
@@ -859,20 +882,8 @@ ArcDiagramToTubularSurface:=function(arc)
             ]                                                                     ##
         );                                                                        ##
         Add(sub[3],Length(bnd[3]));                                               ##
-        Add( # l+9 top                                                            ##
-            bnd[3],                                                               ##
-            [                                                                     ##
-                4,                                                                ##
-                Last(Difference(Positions(bnd[2],bnd[2][dif]),[dif])),            ##
-                m+4,                                                              ##
-                m+18,                                                             ##
-                m+19                                                              ##
-            ]                                                                     ##
-        );                                                                        ##
-        Add(sub[3],Length(bnd[3]));                                               ##
-        Add(ucap,Length(bnd[3]));                                                 ##
         dif:=Difference(bnd[3][del_2_cell_2_i]{[2..5]},del_2_cell_2)[1];          ##
-        Add( # l+10 bottom                                                        ##
+        Add( # l+9 bottom                                                         ##
             bnd[3],                                                               ##
             [                                                                     ##
                 4,                                                                ##
@@ -882,49 +893,29 @@ ArcDiagramToTubularSurface:=function(arc)
                 m+21                                                              ##
             ]                                                                     ##
         );                                                                        ##
-        Add(sub[3],Length(bnd[3]));                                               ##
-        Add( # l+11 top                                                           ##
-            bnd[3],                                                               ##
-            [                                                                     ##
-                4,                                                                ##
-                Last(Difference(Positions(bnd[2],bnd[2][dif]),[dif])),            ##
-                m+14,                                                             ##
-                m+20,                                                             ##
-                m+21                                                              ##
-            ]                                                                     ##
-        );                                                                        ##
-        Add(sub[3],Length(bnd[3]));                                               ##
-        Add(ucap,Length(bnd[3]));                                                 ##
+        Add(sub[3],Length(bnd[3]));                                               ##                                             ##
         if IsBound(clr) then                                                      ##
             if clr[pos]=1 then                                                    ##
-                colour[3][Length(bnd[3])-3]:=[-1]; # blue                         ##
-                colour[3][Length(bnd[3])-2]:=[-1]; # blue                         ##
                 colour[3][Length(bnd[3])-1]:=[-1]; # blue                         ##
                 colour[3][Length(bnd[3])]:=[-1]; # blue                           ##
             elif clr[pos]=2 then                                                  ##
-                colour[3][Length(bnd[3])-3]:=[-1]; # blue                         ##
-                colour[3][Length(bnd[3])-2]:=[-1]; # blue                         ##
-                colour[3][Length(bnd[3])-1]:=[1]; # red                           ##
+                colour[3][Length(bnd[3])-1]:=[-1]; # blue                         ##
                 colour[3][Length(bnd[3])]:=[1]; # red                             ##
             elif clr[pos]=3 then                                                  ##
-                colour[3][Length(bnd[3])-3]:=[1]; # red                           ##
-                colour[3][Length(bnd[3])-2]:=[1]; # red                           ##
-                colour[3][Length(bnd[3])-1]:=[-1]; # blue                         ##
+                colour[3][Length(bnd[3])-1]:=[1]; # red                           ##
                 colour[3][Length(bnd[3])]:=[-1]; # blue                           ##
             else                                                                  ##
-                colour[3][Length(bnd[3])-3]:=[1]; # red                           ##
-                colour[3][Length(bnd[3])-2]:=[1]; # red                           ##
                 colour[3][Length(bnd[3])-1]:=[1]; # red                           ##
                 colour[3][Length(bnd[3])]:=[1]; # red                             ##
             fi;                                                                   ##
         fi;                                                                       ##
         ############################################################################
-        Add(bnd[3],[2,m+4,m+5]); # l+12
+        Add(bnd[3],[2,m+4,m+5]); # l+10
         Add(sub[3],Length(bnd[3]));
-        Add(bnd[3],[2,m+14,m+15]); # l+13
+        Add(bnd[3],[2,m+14,m+15]); # l+11
         Add(sub[3],Length(bnd[3]));
         # from this point onwards, cells added are only present in bnd, not sub
-        Add( # l+14
+        Add( # l+12
             bnd[3],
             [
                 6,
@@ -936,7 +927,7 @@ ArcDiagramToTubularSurface:=function(arc)
                 m+16
             ]
         );
-        Add( # l+15
+        Add( # l+13
             bnd[3],
             [
                 6,
@@ -948,41 +939,41 @@ ArcDiagramToTubularSurface:=function(arc)
                 m+17
             ]
         );
-        # 14-02-21 another few 2-cell to bnd only
-        Add( # l+16
+        # 14-02-21 another few 2-cells to bnd only
+        Add( # l+14
             bnd[3],
             [
                 3,
                 Position(bnd[2],[2,a_abv,a]),
                 m,
                 m+18
+            ]
+        );
+        Add( # l+15
+            bnd[3],
+            [
+                3,
+                Position(bnd[2],[2,b_abv,b]),
+                m+1,
+                m+19
+            ]
+        );
+        Add( # l+16
+            bnd[3],
+            [
+                3,
+                Position(bnd[2],[2,c,c_blw]),
+                m+2,
+                m+20
             ]
         );
         Add( # l+17
             bnd[3],
             [
                 3,
-                Position(bnd[2],[2,b_abv,b]),
-                m+1,
-                m+19
-            ]
-        );
-        Add( # l+18
-            bnd[3],
-            [
-                3,
-                Position(bnd[2],[2,a_abv,a]),
-                m,
-                m+18
-            ]
-        );
-        Add( # l+19
-            bnd[3],
-            [
-                3,
-                Position(bnd[2],[2,b_abv,b]),
-                m+1,
-                m+19
+                Position(bnd[2],[2,d,d_blw]),
+                m+3,
+                m+21
             ]
         );
         # 3-skeleton of intersection
@@ -996,8 +987,8 @@ ArcDiagramToTubularSurface:=function(arc)
                 l+5,
                 l+6,
                 l+7,
-                l+12,
-                l+13
+                l+10,
+                l+11
             ]
         );
         Add(
@@ -1021,31 +1012,53 @@ ArcDiagramToTubularSurface:=function(arc)
                 l+3,
                 l+5,
                 l+7,
-                l+14,
-                l+15
+                l+12,
+                l+13
             ]
         );
         # 14-02-21 need two more 3-cells to finish off the structure
         Add(
             bnd[4],
             [
-                4,
+                5,
                 del_2_cell_1_i,
+                l,
                 l+8,
-                l+16,
-                l+17
+                l+14,
+                l+15
             ]
         );
         Add(
             bnd[4],
             [
-                4,
+                5,
                 del_2_cell_2_i,
-                l+10,
-                l+18,
-                l+19
+                l+1,
+                l+9,
+                l+16,
+                l+17
             ]
         );
+
+        if IsBound(clr) then
+            f_clr:=clr[pos]*1;
+            if f_clr=1 then
+                f_clr1:=-1;
+                f_clr2:=-1;
+            elif f_clr=2 then
+                f_clr1:=-1;
+                f_clr2:=1;
+            elif f_clr=3 then
+                f_clr1:=1;
+                f_clr2:=-1;
+            else
+                f_clr1:=1;
+                f_clr2:=1;
+            fi;
+        else
+            f_clr1:=0;
+            f_clr2:=0;
+        fi;
 
         for i in [1..Length(pipes)] do
             if IsBound(pipes[i][1][1]) then
@@ -1070,8 +1083,7 @@ ArcDiagramToTubularSurface:=function(arc)
                                 )
                             ),
                             l+8,
-                            l+9,
-                            l+12
+                            l+10
                         ],
                         [
                             Filtered(
@@ -1094,7 +1106,8 @@ ArcDiagramToTubularSurface:=function(arc)
                             n,
                             n+1
                         ],
-                        '*' # just to mark this pipe as the vertical part of an intersection  
+                        '*', # just to mark this pipe as the vertical part of an intersection
+                        f_clr1
                     ];
                 elif pipes[i][1][1]=del_2_cell_2_i then
                     pipes[i]:=[
@@ -1116,9 +1129,8 @@ ArcDiagramToTubularSurface:=function(arc)
                                     )
                                 )
                             ),
-                            l+10,
-                            l+11,
-                            l+13
+                            l+9,
+                            l+11
                         ],
                         [
                             Filtered(
@@ -1141,7 +1153,8 @@ ArcDiagramToTubularSurface:=function(arc)
                             n+6,
                             n+7
                         ],
-                        '*'
+                        '*',
+                        f_clr2
                     ];
                 fi;
             fi;
@@ -1151,13 +1164,19 @@ ArcDiagramToTubularSurface:=function(arc)
                 int:=Set(
                     Intersection(
                         pipes[i][3],
-                        Concatenation(crossings)+l0
+                        [a,b,c,d]
                     )
                 );
                 if Length(int)=4 then
                     if crs[Position(List(crossings+l0,Set),int)]=0 then
                         pipes[i]:=[
-                            [],
+                            [
+                                l+2,
+                                l+4,
+                                l+6,
+                                l+12,
+                                l+13
+                            ],
                             [
                                 m,
                                 m+1,
@@ -1167,6 +1186,10 @@ ArcDiagramToTubularSurface:=function(arc)
                                 m+14
                             ],
                             [
+                                a,
+                                b,
+                                c,
+                                d,
                                 n,
                                 n+1,
                                 n+6,
@@ -1189,7 +1212,145 @@ ArcDiagramToTubularSurface:=function(arc)
             );
         fi;
     od;
-    return pipes;
+    for i in [1..Length(pipes)] do # ignoring all self-intersections, join all
+    # pipes which intersect at a common crossing point
+        for j in [i+1..Length(pipes)] do
+            if not IsBound(pipes[i][4]) and not IsBound(pipes[j][4]) then
+                int:=Intersection(pipes[i][3],pipes[j][3]);
+                if Length(int)>=2 and Intersection(int,Concatenation(crossings)+l0)=int then
+                    Append(pipes[i][1],pipes[j][1]);
+                    pipes[i][1]:=Set(pipes[i][1]); pipes[j][1]:=[];
+                    Append(pipes[i][2],pipes[j][2]);
+                    pipes[i][2]:=Set(pipes[i][2]); pipes[j][2]:=[];
+                    Append(pipes[i][3],pipes[j][3]);
+                    pipes[i][3]:=Set(pipes[i][3]); pipes[j][3]:=[];
+                fi;
+            fi;
+        od;
+    od;
+    pipes:=Filtered(pipes,x->x<>[[],[],[]]);
+    for i in [1..Length(pipes)] do # add the degree two 2-cells to the ends of each pipe
+    # except for the vertical pipes at each intersection (they already have them)
+        if not IsBound(pipes[i][4]) then
+            for j in Filtered(bnd[3]{[l2+1..2*l2]},x->x[1]=2) do
+                int:=Intersection(pipes[i][2],j{[2,3]});
+                if int<>[] then
+                    Add(pipes[i][1],Position(bnd[3],j));
+                fi;
+            od;
+        fi;
+    od;
+    for i in [1..Length(pipes)] do # if two pipes' 0-skeletons intersect (at somewhere other
+    # than a crossing), add a new 1-cell whose boundary is their intersection
+        for j in [i+1..Length(pipes)] do
+            int:=Intersection(pipes[i][3],pipes[j][3]);
+            if int<>[] then
+                if Intersection(int,Concatenation(crossings)+l0)=[] and
+                    int<[2*l0,2*l0] then
+                        Add(int,2,1);
+                        Add(bnd[2],int);
+                        Add(sub[2],Length(bnd[2]));
+                fi;
+            fi;
+        od;
+    od;
+    for i in [1..Length(pipes)] do # replace the 1-cells (added pre IntersectingCylinders)
+    # that occur twice with either the new cell we just added or the other occurance of
+        for j in [1..Length(pipes[i][2])] do # that cell which is not in pipes[i][2]
+            pos:=Positions(
+                bnd[2],
+                [
+                    2,
+                    bnd[2][pipes[i][2][j]][2],
+                    bnd[2][pipes[i][2][j]][3]
+                ]
+            );
+            if Length(pos)>=2 and
+                [
+                    bnd[2][pipes[i][2][j]][2],
+                    bnd[2][pipes[i][2][j]][3]
+                ]<[2*l0,2*l0] then
+                    cell:=Last(Filtered(pos,x->x<>pipes[i][2][j]));
+                    pipes[i][2][j]:=cell;
+            fi;
+        od;
+    od;
+    HorizontalOrVertical:=function(l)
+        if l in hbars+l0 then
+            return "horizontal";
+        fi;
+        return "vertical";
+    end;
+    for i in [1..Length(pipes)] do # if a pipe contains 1-cells from crossings then
+        # filter out the horizontal/vertical 1-cells
+        # should said pipe be vertical/horizontal itself
+        # however if a pipe contains a self intersection remove both the horizontal
+        # AND vertical 1-cells
+        int:=Intersection(pipes[i][3],Concatenation(crossings)+l0);
+        if Length(int)=4 then
+            pos:=Position(List(crossings,Set)+l0,Set(int));
+            if crs[pos]=0 then
+                pipes[i][2]:=Difference(
+                    pipes[i][2],
+                    [
+                        Position(bnd[2],[2,crossings[pos][1]+l0,crossings[pos][2]+l0]),
+                        Position(bnd[2],[2,crossings[pos][3]+l0,crossings[pos][4]+l0]),
+                        Position(bnd[2],[2,crossings[pos][1]+l0,crossings[pos][3]+l0]),
+                        Position(bnd[2],[2,crossings[pos][2]+l0,crossings[pos][4]+l0])
+                    ]
+                );
+            else
+                ori:=HorizontalOrVertical(pipes[i][3]);
+                if ori="horizontal" then
+                    pipes[i][2]:=Difference(
+                    pipes[i][2],
+                    [
+                        Position(bnd[2],[2,crossings[pos][1]+l0,crossings[pos][2]+l0]),
+                        Position(bnd[2],[2,crossings[pos][3]+l0,crossings[pos][4]+l0]),
+                    ]
+                );
+                else
+                    pipes[i][2]:=Difference(
+                    pipes[i][2],
+                    [
+                        Position(bnd[2],[2,crossings[pos][1]+l0,crossings[pos][3]+l0]),
+                        Position(bnd[2],[2,crossings[pos][2]+l0,crossings[pos][4]+l0])
+                    ]
+                );
+                fi;
+            fi;
+        fi;
+    od;
+    for i in [1..Length(pipes)] do # add new 2-cells to bnd[3] whose boundary is
+    # the pipes[i][2] 1-cells
+        cell:=Set(pipes[i][2]);
+        Add(cell,Length(cell),1);
+        Add(bnd[3],cell);
+        Add(sub[3],Length(bnd[3]));
+        Add(ucap,Length(bnd[3]));
+        Add(pipes[i][1],Length(bnd[3]));
+        if IsBound(pipes[i][4]) then
+            if IsBound(clr) then
+                colour[Length(bnd[3])]:=pipes[i][5];
+            fi;
+        fi;
+    od;
+    for i in [1..Length(pipes)] do # find where pipes intersect in their 2-skeleta
+    # use this to form the 3-cells comprising the interiors of the pipes
+        for j in [i+1..Length(pipes)] do
+            if Intersection(pipes[i][1],pipes[j][1])<>[] then
+                Append(pipes[i][1],pipes[j][1]);
+                pipes[j][1]:=[];
+            fi;
+        od;
+    od;
+    for i in [1..Length(pipes)] do
+        if pipes[i][1]<>[] then
+            cell:=Set(pipes[i][1]);
+            Add(cell,Length(cell),1);
+            Add(bnd[4],cell);
+        fi;
+    od;
 ###################################################################################
 
 # add a cap to both ends of D x [0,1] 
