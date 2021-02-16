@@ -618,7 +618,7 @@ ArcDiagramToTubularSurface:=function(arc)
                     pipes[i][2],
                     [
                         Position(bnd[2],[2,l[1],l[3]]),
-                        Position(bnd[2],[2,l[3],l[4]])
+                        Position(bnd[2],[2,l[2],l[4]])
                     ]
                 );
             fi;
@@ -1096,7 +1096,6 @@ ArcDiagramToTubularSurface:=function(arc)
                                 )=2
                             )[1],
                             m+4,
-                            m+5,
                             m+18,
                             m+19
                         ],
@@ -1143,7 +1142,6 @@ ArcDiagramToTubularSurface:=function(arc)
                                 )=2
                             )[1],
                             m+14,
-                            m+15,
                             m+20,
                             m+21
                         ],
@@ -1392,5 +1390,6 @@ ArcDiagramToTubularSurface:=function(arc)
 ####################################################################################
     x:=CWSubcomplexToRegularCWMap([RegularCWComplex(bnd),sub]);
     x!.colour:=colour_;
+    #return List(Filtered(sub[2],x->RegularCWComplex(bnd)!.coboundaries[2][x][1]=5),y->bnd[2][y]);
     return x;
 end;
