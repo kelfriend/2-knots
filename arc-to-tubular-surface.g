@@ -1327,9 +1327,9 @@ ArcDiagramToTubularSurface:=function(arc)
         Add(sub[3],Length(bnd[3]));
         Add(ucap,Length(bnd[3]));
         Add(pipes[i][1],Length(bnd[3]));
-        if IsBound(pipes[i][4]) then
+        if IsBound(pipes[i][5]) then
             if IsBound(clr) then
-                colour[Length(bnd[3])]:=pipes[i][5];
+                colour[3][Length(bnd[3])]:=[pipes[i][5]];
             fi;
         fi;
     od;
