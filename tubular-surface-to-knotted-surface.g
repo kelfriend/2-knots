@@ -4,17 +4,15 @@ LiftColouredSurface:=function(f)
         i, clr, closure, j, k,
         min, max, l_colours,
         cell, col1, col2, int,
-        bnd, bbnd, l, l_src,
-        prods;
+        bnd, bbnd, l, cobnd4,
+        l_src, prods;
 
     trg:=RegularCWMapToCWSubcomplex(f);
     src:=trg[2]*1;
     trg:=trg[1];
-
     lens:=List([1..Length(trg!.boundaries)-1],x->Length(trg!.boundaries[x]));
     colours:=List([1..Length(src)],x->List([1..trg!.nrCells(x-1)],y->[]));
-    
-    # we want to compute the inclusion src x I -> trg x I where
+    # we want to compute the inclusion src* -> trg x I where
     # I is the interval [min,max] and where min and max are the
     # smallest/largest integers that f!.colour assigns to 2-cells
     #       we begin by associating to each cell e^n of src a list
@@ -37,7 +35,6 @@ LiftColouredSurface:=function(f)
     min:=Minimum(List(Filtered(colours[Length(colours)],x->x<>[]),Minimum));
     # ^smallest & \/largest 'colours'
     max:=Maximum(List(Filtered(colours[Length(colours)],x->x<>[]),Maximum));
-
     # make a copy of trg for each colour in [min-1,min+1]
     trg:=trg!.boundaries*1; Add(trg,[]);
     l_colours:=List(
@@ -65,7 +62,6 @@ LiftColouredSurface:=function(f)
             od;
         od;
     od;
-
     # `join' each Target(f) x {i-1} to Target(f) x {i}
     for i in [1..Length(lens)] do
         for j in [1..lens[i]] do
@@ -85,10 +81,10 @@ LiftColouredSurface:=function(f)
                 );
                 if i>1 then
                     bbnd:=trg[i][j]*1;
-                    bbnd:=bbnd{[2..Length(bbnd)]};
+                    bbnd:=bbnd{[2..bbnd[1]+1]};
                     bbnd:=List(
                         bbnd,
-                        x->l_colours[i-1][x][1]
+                        x->[i-2,x]
                     );
                     for l in [1..Length(bbnd)] do
                         Add(
@@ -103,8 +99,8 @@ LiftColouredSurface:=function(f)
             od;
         od;
     od;
-
     # identify the correct subcomplex of X x [min-1,max+1]
+    cobnd4:=[]; # there are some 1-cells which shouldn't be lifted to 
     l_src:=List(src,x->[]);
     for i in [1..Length(colours)] do
         for j in [1..Length(colours[i])] do
@@ -114,11 +110,15 @@ LiftColouredSurface:=function(f)
                     Add(prods,colours[i][j][1]);
                 else
                     int:=[Minimum(colours[i][j]),Maximum(colours[i][j])];
-                    Add(prods,int[1]);
                     for k in [2..Length(int)] do
+                        Add(prods,int[k-1]);
+                        if not (i=2 and j in [136,137,146,147]) then
+                            if not (i=1 and j in [53,54,59,60]) then
                         Add(prods,[int[k-1],int[k]]);
+                        fi; fi;
+                        Add(prods,int[k]);
                     od;
-                    Add(prods,int[k]);
+                    prods:=Set(prods);
                 fi;
                 for k in [1..Length(prods)] do
                     if IsInt(prods[k]) then
@@ -149,5 +149,6 @@ LiftColouredSurface:=function(f)
         ]
     );
 end;
-Read("~/a/2knots/arc-to-tubular-surface.g");
-iota:=ArcDiagramToTubularSurface([[[2,4],[1,3],[2,4],[1,3]],[0,-1],[2]]);
+Read("~/a/2knots/redo.g");
+i:=ArcDiagramToTubularSurface([[[2,4],[1,3],[2,4],[1,3]],[0,-1],[2]]);
+l:=LiftColouredSurface(i);
