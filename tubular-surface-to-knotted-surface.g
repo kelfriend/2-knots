@@ -1,7 +1,8 @@
 LiftColouredSurface:=function(f)
     local
         src, trg, lens, colours,
-        i, clr, closure, j, k,
+        cbnd4_1cells, cbnd4_1cells_bnd,
+        i, j, clr, closure, k,
         min, max, l_colours,
         cell, col1, col2, int,
         bnd, bbnd, l, cobnd4,
@@ -12,6 +13,19 @@ LiftColouredSurface:=function(f)
     trg:=trg[1];
     lens:=List([1..Length(trg!.boundaries)-1],x->Length(trg!.boundaries[x]));
     colours:=List([1..Length(src)],x->List([1..trg!.nrCells(x-1)],y->[]));
+    cbnd4_1cells:=[]; # list of all 1-cells of src whose coboundary consists of 4 2-cells
+    cbnd4_1cells_bnd:=[]; # the boundary of the above 1-cells
+    for i in [1..Source(f)!.nrCells(1)] do
+        if Source(f)!.coboundaries[2][i][1]=4 then
+            Add(cbnd4_1cells,src[2][i]);
+            for j in [2,3] do
+                Add(
+                    cbnd4_1cells_bnd,
+                    src[1][Source(f)!.boundaries[2][i][j]]
+                );
+            od;
+        fi;
+    od;
     # we want to compute the inclusion src* -> trg x I where
     # I is the interval [min,max] and where min and max are the
     # smallest/largest integers that f!.colour assigns to 2-cells
@@ -112,10 +126,10 @@ LiftColouredSurface:=function(f)
                     int:=[Minimum(colours[i][j]),Maximum(colours[i][j])];
                     for k in [2..Length(int)] do
                         Add(prods,int[k-1]);
-                        if not (i=2 and j in [136,137,146,147]) then
-                            if not (i=1 and j in [53,54,59,60]) then
+                        if not (i=2 and j in cbnd4_1cells) and
+                            not (i=1 and j in cbnd4_1cells_bnd) then
                         Add(prods,[int[k-1],int[k]]);
-                        fi; fi;
+                        fi;
                         Add(prods,int[k]);
                     od;
                     prods:=Set(prods);
@@ -149,6 +163,3 @@ LiftColouredSurface:=function(f)
         ]
     );
 end;
-Read("~/a/2knots/redo.g");
-i:=ArcDiagramToTubularSurface([[[2,4],[1,3],[2,4],[1,3]],[0,-1],[2]]);
-l:=LiftColouredSurface(i);
