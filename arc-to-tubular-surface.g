@@ -976,6 +976,9 @@ ArcDiagramToTubularSurface:=function(arc)
                 m+21
             ]
         );
+        # 19/04/21 found some 2-cells missing from ucap causing the chain complex
+        # boundary matrices to detect that this wasn't a regular cw-complex
+        for i in [0..3] do Add(ucap,l+14+i); od; 
         # 3-skeleton of intersection
         Add(
             bnd[4],
@@ -1390,6 +1393,5 @@ ArcDiagramToTubularSurface:=function(arc)
 ####################################################################################
     x:=CWSubcomplexToRegularCWMap([RegularCWComplex(bnd),sub]);
     x!.colour:=colour_;
-    #return List(Filtered(sub[2],x->RegularCWComplex(bnd)!.coboundaries[2][x][1]=5),y->bnd[2][y]);
     return x;
 end;
